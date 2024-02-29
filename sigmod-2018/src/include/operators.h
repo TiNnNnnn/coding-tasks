@@ -12,36 +12,46 @@
 #include "relation.h"
 #include "parser.h"
 
-namespace std {
-/// Simple hash function to enable use with unordered_map
-template<>
-struct hash<SelectInfo> {
-    std::size_t operator()(SelectInfo const &s) const noexcept {
-        return s.binding ^ (s.col_id << 5);
-    }
-};
+namespace std
+{
+    /// Simple hash function to enable use with unordered_map
+    template <>
+    struct hash<SelectInfo>
+    {
+        std::size_t operator()(SelectInfo const &s) const noexcept
+        {
+            return s.binding ^ (s.col_id << 5);
+        }
+    };
 };
 
+class Joiner;
+
 /// Operators materialize their entire result
-class Operator {
+class Operator
+{
+    friend Joiner;
+
 protected:
-    /// Mapping from select info to data
+    /// select info 到 result的映射
     std::unordered_map<SelectInfo, unsigned> select_to_result_col_id_;
     /// The materialized results
     std::vector<uint64_t *> result_columns_;
-    /// The tmp results
+    /// 中间结果
     std::vector<std::vector<uint64_t>> tmp_results_;
     /// The result size
     uint64_t result_size_ = 0;
 
 public:
     /// The destructor
-    virtual ~Operator() = default;;
+    virtual ~Operator() = default;
+    ;
 
     /// Require a column and add it to results
     virtual bool require(SelectInfo info) = 0;
     /// Resolves a column
-    unsigned resolve(SelectInfo info) {
+    unsigned resolve(SelectInfo info)
+    {
         assert(select_to_result_col_id_.find(info) != select_to_result_col_id_.end());
         return select_to_result_col_id_[info];
     }
@@ -50,12 +60,14 @@ public:
     /// Get  materialized results
     virtual std::vector<uint64_t *> getResults();
 
-    uint64_t result_size() const {
+    uint64_t result_size() const
+    {
         return result_size_;
     }
 };
 
-class Scan : public Operator {
+class Scan : public Operator
+{
 protected:
     /// The relation
     const Relation &relation_;
@@ -65,7 +77,7 @@ protected:
 public:
     /// The constructor
     Scan(const Relation &r, unsigned relation_binding)
-        : relation_(r), relation_binding_(relation_binding) {};
+        : relation_(r), relation_binding_(relation_binding){};
     /// Require a column and add it to results
     bool require(SelectInfo info) override;
     /// Run
@@ -74,7 +86,8 @@ public:
     virtual std::vector<uint64_t *> getResults() override;
 };
 
-class FilterScan : public Scan {
+class FilterScan : public Scan
+{
 private:
     /// The filter info
     std::vector<FilterInfo> filters_;
@@ -92,26 +105,27 @@ public:
     FilterScan(const Relation &r, std::vector<FilterInfo> filters)
         : Scan(r,
                filters[0].filter_column.binding),
-          filters_(filters) {};
+          filters_(filters){};
     /// The constructor
     FilterScan(const Relation &r, FilterInfo &filter_info)
         : FilterScan(r,
                      std::vector<
-                     FilterInfo> {
-        filter_info
-    }) {};
+                         FilterInfo>{
+                         filter_info}){};
 
     /// Require a column and add it to results
     bool require(SelectInfo info) override;
     /// Run
     void run() override;
     /// Get  materialized results
-    virtual std::vector<uint64_t *> getResults() override {
+    virtual std::vector<uint64_t *> getResults() override
+    {
         return Operator::getResults();
     }
 };
 
-class Join : public Operator {
+class Join : public Operator
+{
 private:
     /// The input operators
     std::unique_ptr<Operator> left_, right_;
@@ -143,14 +157,15 @@ public:
     Join(std::unique_ptr<Operator> &&left,
          std::unique_ptr<Operator> &&right,
          const PredicateInfo &p_info)
-        : left_(std::move(left)), right_(std::move(right)), p_info_(p_info) {};
+        : left_(std::move(left)), right_(std::move(right)), p_info_(p_info){};
     /// Require a column and add it to results
     bool require(SelectInfo info) override;
     /// Run
     void run() override;
 };
 
-class SelfJoin : public Operator {
+class SelfJoin : public Operator
+{
 private:
     /// The input operators
     std::unique_ptr<Operator> input_;
@@ -171,14 +186,15 @@ private:
 public:
     /// The constructor
     SelfJoin(std::unique_ptr<Operator> &&input, PredicateInfo &p_info)
-        : input_(std::move(input)), p_info_(p_info) {};
+        : input_(std::move(input)), p_info_(p_info){};
     /// Require a column and add it to results
     bool require(SelectInfo info) override;
     /// Run
     void run() override;
 };
 
-class Checksum : public Operator {
+class Checksum : public Operator
+{
 private:
     /// The input operator
     std::unique_ptr<Operator> input_;
@@ -191,9 +207,10 @@ public:
     /// The constructor
     Checksum(std::unique_ptr<Operator> &&input,
              std::vector<SelectInfo> col_info)
-        : input_(std::move(input)), col_info_(std::move(col_info)) {};
+        : input_(std::move(input)), col_info_(std::move(col_info)){};
     /// Request a column and add it to results
-    bool require(SelectInfo info) override {
+    bool require(SelectInfo info) override
+    {
         // check sum is always on the highest level
         // and thus should never request anything
         throw;
@@ -201,8 +218,8 @@ public:
     /// Run
     void run() override;
 
-    const std::vector<uint64_t> &check_sums() {
+    const std::vector<uint64_t> &check_sums()
+    {
         return check_sums_;
     }
 };
-
