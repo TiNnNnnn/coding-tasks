@@ -141,7 +141,6 @@ void Relation::loadStat(unsigned colId)
     std::unordered_set<uint64_t> cntSet;
     // 计算统计采样值，确保采样的元组数量不会超过指定的数量
     const unsigned stat_sample = size_ / SAMPLING_CNT == 0 ? 1 : size_ / SAMPLING_CNT;
-    //
     for (unsigned i = 0; i < size_; i += stat_sample)
     {
         cntSet.insert(c[i]);

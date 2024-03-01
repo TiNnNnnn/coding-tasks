@@ -65,7 +65,7 @@ public:
                 tid = __sync_fetch_and_add(&nextTid,1);
                 //为tid号线程创建内存缓冲区
                 localMemPool[tid] = new MemoryPool(4*1024*1024lu,4096);
-                //启动时间循环,处理所有已经提交的异步操作，知道没有待处理事件
+                //启动时间循环,处理所有已经提交的异步操作，直到没有待处理事件
                 ios_.run(); });
         }
         new_cnt_ = 0;

@@ -18,6 +18,7 @@
 #include "relation.h"
 #include "parser.h"
 #include "config.h"
+#include "utils.h"
 
 namespace std
 {
@@ -62,6 +63,7 @@ protected:
     uint64_t result_size_ = 0;
 
 public:
+    int counted_ = 0;
     bool isStopped_ = false;
     // 请求列并，并加入结果集中
     virtual bool require(SelectInfo info) = 0;
@@ -107,12 +109,12 @@ protected:
     /// 查询中的关系名
     unsigned relation_binding_;
     // require info
-    std::vector<SelectInfo> infos;
+    std::vector<SelectInfo> infos_;
 
 public:
     Scan(const Relation &r, unsigned relation_binding)
         : relation_(r), relation_binding_(relation_binding){};
-    /// 请求列并，并加入结果集中
+    /// 请求列,并加入结果集中
     bool require(SelectInfo info) override;
     virtual void asynRun(boost::asio::io_service &ios) override;
     /// Get  materialized results
@@ -322,7 +324,7 @@ private:
 
     int pendingTask = -1;
     unsigned minTuplesPerTask_ = 1000;
-    
+
 private:
     void checkSumTask(boost::asio::io_service *ios, int taskIdx, uint64_t start, uint64_t len);
 
@@ -340,11 +342,9 @@ public:
     /// Request a column and add it to results
     bool require(SelectInfo info) override
     {
-        // check sum is always on the highest level
-        // and thus should never request anything
         throw;
     }
-    virtual void asynRun(boost::asio::io_service &ios){}
+    virtual void asynRun(boost::asio::io_service &ios) {}
     virtual void asynRun(boost::asio::io_service &ios, int queryIdx);
     virtual void createAsyncTasks(boost::asio::io_service &ios) override;
     virtual void finishAsyncRun(

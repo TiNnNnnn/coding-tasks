@@ -137,13 +137,14 @@ void Joiner::createAsyncQueryTask(std::string line)
     __sync_fetch_and_add(&nextQueryIdx_, 1);
 }
 
-// 执行join操作
+// 执行join操作 （构建查找树）
 void Joiner::join(QueryInfo &query, int queryIdx)
 {
     std::set<unsigned> used_relations;
 
     // 总是选择从第一个连接条件开始，将其他连接追加到它上面
     const auto &firstJoin = query.predicates()[0];
+
     std::shared_ptr<Operator> left, right;
     // 添加左扫描
     left = addScan(used_relations, firstJoin.left, query);
@@ -163,6 +164,8 @@ void Joiner::join(QueryInfo &query, int queryIdx)
         Utils::CondPanic(p_info.left < p_info.right, "join left >= right");
         auto &left_info = p_info.left;
         auto &right_info = p_info.right;
+
+        std::shared_ptr<Operator> left, right;
 
         switch (analyzeInputOfJoin(used_relations, left_info, right_info))
         {

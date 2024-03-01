@@ -7,26 +7,29 @@
 
 #include "relation.h"
 
-struct SelectInfo {
+struct SelectInfo
+{
     /// Relation id
     RelationId rel_id;
-    /// Binding for the relation
+    /// Binding for the relation （table name）
     unsigned binding;
     /// Column id
     unsigned col_id;
 
     /// The constructor
     SelectInfo(RelationId rel_id, unsigned b, unsigned col_id)
-        : rel_id(rel_id), binding(b), col_id(col_id) {};
+        : rel_id(rel_id), binding(b), col_id(col_id){};
     /// The constructor if relation id does not matter
-    SelectInfo(unsigned b, unsigned colId) : SelectInfo(-1, b, colId) {};
+    SelectInfo(unsigned b, unsigned colId) : SelectInfo(-1, b, colId){};
 
     /// Equality operator
-    inline bool operator==(const SelectInfo &o) const {
+    inline bool operator==(const SelectInfo &o) const
+    {
         return o.rel_id == rel_id && o.binding == binding && o.col_id == col_id;
     }
     /// Less Operator
-    inline bool operator<(const SelectInfo &o) const {
+    inline bool operator<(const SelectInfo &o) const
+    {
         return (binding < o.binding) || (binding == o.binding && col_id < o.col_id);
     }
 
@@ -41,8 +44,14 @@ struct SelectInfo {
     constexpr static const char delimiterSQL[] = ", ";
 };
 
-struct FilterInfo {
-    enum Comparison : char { Less = '<', Greater = '>', Equal = '=' };
+struct FilterInfo
+{
+    enum Comparison : char
+    {
+        Less = '<',
+        Greater = '>',
+        Equal = '='
+    };
     /// Filter Column
     SelectInfo filter_column;
     /// Constant
@@ -54,7 +63,7 @@ struct FilterInfo {
     FilterInfo(SelectInfo filter_column, uint64_t constant, Comparison comparison)
         : filter_column(filter_column),
           constant(constant),
-          comparison(comparison) {};
+          comparison(comparison){};
 
     /// Dump SQL
     std::string dumpSQL();
@@ -67,11 +76,12 @@ struct FilterInfo {
     constexpr static const char delimiterSQL[] = " and ";
 };
 
-static const std::vector<FilterInfo::Comparison> comparisonTypes {
+static const std::vector<FilterInfo::Comparison> comparisonTypes{
     FilterInfo::Comparison::Less, FilterInfo::Comparison::Greater,
     FilterInfo::Comparison::Equal};
 
-struct PredicateInfo {
+struct PredicateInfo
+{
     /// Left
     SelectInfo left;
     /// Right
@@ -79,7 +89,7 @@ struct PredicateInfo {
 
     /// The constructor
     PredicateInfo(SelectInfo left, SelectInfo right)
-        : left(left), right(right) {};
+        : left(left), right(right){};
 
     /// Dump text format
     std::string dumpText();
@@ -92,7 +102,8 @@ struct PredicateInfo {
     constexpr static const char delimiterSQL[] = " and ";
 };
 
-class QueryInfo {
+class QueryInfo
+{
 private:
     /// The relation ids
     std::vector<RelationId> relation_ids_;
@@ -127,19 +138,23 @@ public:
     void clear();
 
     /// The relation ids
-    const std::vector<RelationId> &relation_ids() const {
+    const std::vector<RelationId> &relation_ids() const
+    {
         return relation_ids_;
     }
     /// The predicates
-    const std::vector<PredicateInfo> &predicates() const {
+    const std::vector<PredicateInfo> &predicates() const
+    {
         return predicates_;
     }
     /// The filters
-    const std::vector<FilterInfo> &filters() const {
+    const std::vector<FilterInfo> &filters() const
+    {
         return filters_;
     }
     /// The selections
-    const std::vector<SelectInfo> &selections() const {
+    const std::vector<SelectInfo> &selections() const
+    {
         return selections_;
     }
 
@@ -148,6 +163,4 @@ private:
     void parsePredicate(std::string &raw_predicate);
     /// Resolve bindings of relation ids
     void resolveRelationIds();
-
 };
-
