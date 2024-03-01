@@ -309,21 +309,34 @@ public:
     // void run() override;
 };
 
-class Checksum : public Operator
+class CheckSum : public Operator
 {
 private:
+    Joiner &joiner_;
     /// The input operator
-    std::unique_ptr<Operator> input_;
+    std::shared_ptr<Operator> input_;
     /// The join predicate info
     const std::vector<SelectInfo> col_info_;
 
-    std::vector<uint64_t> check_sums_;
+    int queryIdx_;
+
+    int pendingTask = -1;
+    unsigned minTuplesPerTask_ = 1000;
+    
+private:
+    void checkSumTask(boost::asio::io_service *ios, int taskIdx, uint64_t start, uint64_t len);
 
 public:
+    std::vector<uint64_t> check_sums_;
     /// The constructor
-    Checksum(std::unique_ptr<Operator> &&input,
+    // Checksum(std::unique_ptr<Operator> &&input,
+    //          std::vector<SelectInfo> col_info)
+    //     : input_(std::move(input)), col_info_(std::move(col_info)){};
+    /// The constructor
+    CheckSum(Joiner &joiner,
+             std::shared_ptr<Operator> &input,
              std::vector<SelectInfo> col_info)
-        : input_(std::move(input)), col_info_(std::move(col_info)){};
+        : joiner_(joiner), input_(input), col_info_(col_info){};
     /// Request a column and add it to results
     bool require(SelectInfo info) override
     {
@@ -331,6 +344,13 @@ public:
         // and thus should never request anything
         throw;
     }
+    virtual void asynRun(boost::asio::io_service &ios){}
+    virtual void asynRun(boost::asio::io_service &ios, int queryIdx);
+    virtual void createAsyncTasks(boost::asio::io_service &ios) override;
+    virtual void finishAsyncRun(
+        boost::asio::io_service &ios,
+        bool startParentAsync = false) override;
+    virtual void printAsyncInfo() override;
     /// Run
     // void run() override;
 

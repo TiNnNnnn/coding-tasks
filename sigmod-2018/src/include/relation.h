@@ -15,7 +15,7 @@ private:
 public:
     /// 元组数量
     uint64_t size_;
-    /// 列指针数组
+    /// 列指针数组 (元素地址)
     std::vector<uint64_t *> columns_;
     // 计算结果数组
     std::vector<std::vector<uint64_t *>> counted_;
@@ -41,6 +41,8 @@ public:
     void storeRelationCSV(const std::string &file_name);
     /// Dump SQL: Create and load table (PostgreSQL)
     void dumpSQL(const std::string &file_name, unsigned relation_id);
+
+    void loadStat(unsigned colId);
 
     /// The number of tuples
     uint64_t size() const

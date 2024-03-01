@@ -28,11 +28,11 @@ private:
     // 待处理的异步连接数量
     int pendingAsyncJoin_ = 0;
     // 下一个查询的索引
-    int nextQueryIdx = 0;
+    int nextQueryIdx_ = 0;
     // 存储异步连接结果的向量
     std::vector<std::vector<uint64_t>> asyncResults_;
     // 存储异步连接任务的向量
-    std::vector<std::shared_ptr<CheckSum>> asyncJoins;
+    std::vector<std::shared_ptr<CheckSum>> asyncJoins_;
     // 用于异步操作的条件变量
     std::condition_variable cond_;
     std::mutex mu_;
@@ -56,7 +56,7 @@ public:
         : work_(ios_)
     {
         asyncResults_.reserve(100);
-        asyncJoins.reserve(100);
+        asyncJoins_.reserve(100);
 
         for (int i = 0; i < threadNum; i++)
         {
@@ -85,36 +85,31 @@ public:
         }
     }
     /// The relations that might be joined
-    std::vector<Relation> relations_;
+    static std::vector<Relation> relations_;
     /// Add relation
     void addRelation(const char *file_name);
     void addRelation(Relation &&relation);
     /// Get relation
     const Relation &getRelation(unsigned relation_id);
     /// Joins a given set of relations
-    std::string join(QueryInfo &i);
+    void join(QueryInfo &i, int queryIdx);
 
     // const std::vector<Relation> &relations() const
     // {
     //     return relations_;
     // }
+    void waitAsyncJoins();
+    std::vector<std::string> getAsyncJoinResults();
+    void createAsyncQueryTask(std::string line);
+
     void printAsyncJoinInfo();
     void loadStat();
 
-    ~Joiner()
-    {
-        ios_.stop();
-        threadpool_.join_all();
-        for (int i = 0; i < THREAD_NUM; i++)
-        {
-            delete localMemPool[i];
-        }
-        delete[] localMemPool;
-    }
+    ~Joiner();
 
 private:
     /// Add scan to query
-    std::unique_ptr<Operator> addScan(std::set<unsigned> &used_relations,
+    std::shared_ptr<Operator> addScan(std::set<unsigned> &used_relations,
                                       const SelectInfo &info,
                                       QueryInfo &query);
 };
