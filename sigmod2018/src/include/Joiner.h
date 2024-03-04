@@ -37,11 +37,6 @@ class Joiner
     void touchBuf(int i)
     {
         buf[i] = (char *)malloc(4 * 2 * 1024 * 1024 * 1024ll);
-        /*
-        for (int j=0; j <1*1024*1024*1024ll/4096; j++)
-            buf[i][j*4096ll] = 1;
-        */
-
         __sync_fetch_and_add(&cntTouch, 1);
     }
     void clearBuf(int i)

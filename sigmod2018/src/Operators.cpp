@@ -13,6 +13,7 @@ using namespace std;
 void Operator::finishAsyncRun(boost::asio::io_service &ioService, bool startParentAsync)
 {
     isStopped = true;
+    //左右任务已经完成，开始执行父任务
     if (auto p = parent.lock())
     {
         if (resultSize == 0)
@@ -93,8 +94,8 @@ bool FilterScan::require(SelectInfo info)
     return true;
 }
 
-bool FilterScan::applyFilter(uint64_t i, FilterInfo &f)
 // Apply filter
+bool FilterScan::applyFilter(uint64_t i, FilterInfo &f)
 {
     auto compareCol(counted == 2 ? relation.counted[f.filterColumn.colId][0] : relation.columns[f.filterColumn.colId]);
     auto constant = f.constant;
@@ -109,7 +110,7 @@ bool FilterScan::applyFilter(uint64_t i, FilterInfo &f)
     };
     return false;
 }
-//---------------------------------------------------------------------------
+
 void FilterScan::asyncRun(boost::asio::io_service &ioService)
 {
     cerr << "FilterScan::run" << endl;
@@ -118,7 +119,7 @@ void FilterScan::asyncRun(boost::asio::io_service &ioService)
     createAsyncTasks(ioService);
 }
 
-//---------------------------------------------------------------------------
+
 void FilterScan::createAsyncTasks(boost::asio::io_service &ioService)
 {
     __sync_synchronize();
@@ -213,9 +214,9 @@ void FilterScan::createAsyncTasks(boost::asio::io_service &ioService)
     }
 }
 
-
 void FilterScan::filterTask(boost::asio::io_service *ioService, int taskIndex, uint64_t start, uint64_t length)
 {
+    // 當前為空
     vector<vector<uint64_t>> &localResults = tmpResults[taskIndex];
     unsigned colSize = inputData.size();
     unordered_map<uint64_t, unsigned> cntMap;
@@ -223,7 +224,6 @@ void FilterScan::filterTask(boost::asio::io_service *ioService, int taskIndex, u
     __sync_synchronize();
     if (isStopped)
     {
-
         goto fs_finish;
     }
 
@@ -231,9 +231,10 @@ void FilterScan::filterTask(boost::asio::io_service *ioService, int taskIndex, u
     {
         localResults.emplace_back();
     }
+    // For Count Column
     if (counted)
     {
-        localResults.emplace_back(); // For Count Column
+        localResults.emplace_back();
     }
 
     for (uint64_t i = start; i < start + length; ++i)
@@ -241,13 +242,15 @@ void FilterScan::filterTask(boost::asio::io_service *ioService, int taskIndex, u
         bool pass = true;
         for (auto &f : filters)
         {
+            // 应用过滤器
             if (!(pass = applyFilter(i, f)))
                 break;
         }
         if (pass)
         {
             if (counted == 1)
-            { // Only one Column will be used
+            {
+                // 加入count column
                 auto iter = cntMap.find(inputData[0][i]);
                 if (iter != cntMap.end())
                 {
@@ -349,18 +352,16 @@ void Join::asyncRun(boost::asio::io_service &ioService)
     right->asyncRun(ioService);
 }
 
-//---------------------------------------------------------------------------
 void Join::createAsyncTasks(boost::asio::io_service &ioService)
 {
     assert(pendingAsyncOperator == 0);
     __sync_synchronize();
     if (isStopped)
     {
-
         finishAsyncRun(ioService, true);
         return;
     }
-
+    // join时小表在左边
     if (left->resultSize > right->resultSize)
     {
         swap(left, right);
@@ -386,9 +387,9 @@ void Join::createAsyncTasks(boost::asio::io_service &ioService)
     {
         cntBuilding = true;
     }
-
+    // no reuslts
     if (left->resultSize == 0)
-    { // no reuslts
+    {
         finishAsyncRun(ioService, true);
         return;
     }
@@ -407,16 +408,22 @@ void Join::createAsyncTasks(boost::asio::io_service &ioService)
     rightColId = right->resolve(pInfo.right);
 
     // cntPartition = CNT_PARTITIONS(right->getResultsSize(), partitionSize);
+
+    // 计算HASH分区数量
     cntPartition = CNT_PARTITIONS(left->resultSize * 8 * 2, partitionSize); // uint64*2(key, value)
     // CNT_PARTITIONS(left->getResultsSize(), partitionSize);
     if (cntPartition < 32)
-        cntPartition = 32;                                   // < left->getResultsSize() ? 32 : left->getResultsSize();
-    cntPartition = 1 << (Utils::log2(cntPartition - 1) + 1); // round up, power of 2 for hashing
+        cntPartition = 32;
+    // 向上取整，得到2的整数次幂
+    cntPartition = 1 << (Utils::log2(cntPartition - 1) + 1);
 
     pendingPartitioning = 2;
+
     partitionTable[0] = (uint64_t *)localMemPool[tid]->alloc(left->getResultsSize());
     partitionTable[1] = (uint64_t *)localMemPool[tid]->alloc(right->getResultsSize());
+
     allocTid = tid;
+
     for (uint64_t i = 0; i < cntPartition; i++)
     {
         partition[0].emplace_back();
@@ -512,7 +519,7 @@ void Join::histogramTask(boost::asio::io_service *ioService, int cntTask, int ta
     auto it = keyColumn.begin(start);
     for (uint64_t i = start, limit = start + length; i < limit; i++, ++it)
     {
-        histograms[leftOrRight][taskIndex][RADIX_HASH(*it, cntPartition)]++; // cntPartition으로 나뉠 수 있도록하는 HASH
+        histograms[leftOrRight][taskIndex][RADIX_HASH(*it, cntPartition)]++;
     }
     int remainder = __sync_sub_and_fetch(&pendingMakingHistogram[leftOrRight * CACHE_LINE_SIZE], 1);
 
@@ -598,7 +605,7 @@ void Join::histogramTask(boost::asio::io_service *ioService, int cntTask, int ta
         }
     }
 }
-//---------------------------------------------------------------------------
+
 void Join::scatteringTask(boost::asio::io_service *ioService, int taskIndex, int leftOrRight, uint64_t start, uint64_t length)
 {
     vector<Column<uint64_t>> &inputData = !leftOrRight ? left->getResults() : right->getResults();
@@ -1214,7 +1221,7 @@ void Checksum::checksumTask(boost::asio::io_service *ioService, int taskIndex, u
         // input = nullptr;
     }
 }
-//---------------------------------------------------------------------------
+
 void Checksum::createAsyncTasks(boost::asio::io_service &ioService)
 {
     assert(pendingAsyncOperator == 0);

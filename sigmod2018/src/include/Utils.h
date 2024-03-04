@@ -26,3 +26,5 @@ public:
     static int log2(unsigned v);
 };
 
+
+

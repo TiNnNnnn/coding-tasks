@@ -18,7 +18,7 @@ void Joiner::addRelation(const char *fileName)
 {
     relations.emplace_back(fileName);
 }
-//---------------------------------------------------------------------------
+
 void Joiner::printAsyncJoinInfo()
 {
     __sync_synchronize();
@@ -29,7 +29,7 @@ void Joiner::printAsyncJoinInfo()
             asyncJoins[i]->printAsyncInfo();
     }
 }
-//---------------------------------------------------------------------------
+
 void Joiner::waitAsyncJoins()
 {
     unique_lock<mutex> lk(cvAsyncMt);
@@ -38,7 +38,7 @@ void Joiner::waitAsyncJoins()
         cvAsync.wait(lk);
     }
 }
-//---------------------------------------------------------------------------
+
 vector<string> Joiner::getAsyncJoinResults()
 {
     vector<string> results;
