@@ -28,6 +28,7 @@ MemoryPool::MemoryPool(uint64_t size, uint64_t assignUnit)
     this->allocSize = next_pow_of_2(size);
     this->assignUnit = next_pow_of_2(assignUnit);
     uint64_t treeSize = this->allocSize / this->assignUnit;
+
     int level = 1;
 
     while ((treeSize >>= 1) % 2 != 1)

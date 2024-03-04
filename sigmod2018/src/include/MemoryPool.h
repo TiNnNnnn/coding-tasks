@@ -1,13 +1,10 @@
 #pragma once
-#include "stdint.h"
-#include <tbb/concurrent_vector.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include "Utils.h"
+#include "Concurrent_vector.h"
 
 struct buddy;
-/*
-    MmoeryPool using buddy
-*/
 class MemoryPool
 {
 public:
@@ -19,7 +16,7 @@ public:
     // 內存池大小
     uint64_t allocSize;
 
-    tbb::concurrent_vector<void *> gcTarget;
+    concurrent_vector<void *> gcTarget;
 
     MemoryPool(uint64_t size, uint64_t assign_unit);
     ~MemoryPool();
@@ -29,6 +26,7 @@ public:
     void requestFree(void *addr);
 };
 
+// buddy used C
 struct buddy *buddy_new(int level);
 void buddy_delete(struct buddy *);
 uint64_t buddy_alloc(struct buddy *, uint64_t size);

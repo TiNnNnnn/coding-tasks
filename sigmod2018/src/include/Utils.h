@@ -3,22 +3,25 @@
 #include <thread>
 #include <iostream>
 #include <mutex>
+#include <vector>
 #include "Relation.h"
 #include "MemoryPool.h"
 
-//编译优化 
+class MemoryPool;
+// 编译优化
 #define LIKELY(x) __builtin_expect((x), 1)
 #define UNLIKELY(x) __builtin_expect((x), 0)
 
 #define CNT_PARTITIONS(WHOLE, PART) (((WHOLE) + ((PART)-1)) / (PART))
 #define RADIX_HASH(value, base) ((value) & (base - 1))
 
-//线程变量
+// 线程变量
 extern MemoryPool **localMemPool;
 extern thread_local int tid;
 extern int nextTid;
 
 extern unsigned cnt;
+
 class Utils
 {
 public:
