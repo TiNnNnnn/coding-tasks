@@ -6,6 +6,7 @@
 #include "Joiner.h"
 #include "Config.h"
 #include "Utils.h"
+#include "monsoon.h"
 #include <sys/mman.h>
 
 using namespace std;
@@ -21,7 +22,7 @@ uint64_t Operator::getResultsSize()
     return resultSize * results.size() * 8;
 }
 
-void Operator::finishAsyncRun(boost::asio::io_service &ioService, bool startParentAsync)
+void Operator::finishAsyncRun(monsoon::IOManager &ioService, bool startParentAsync)
 {
     isStopped = true;
     // 左右任务已经完成，开始执行父任务
@@ -36,7 +37,7 @@ void Operator::finishAsyncRun(boost::asio::io_service &ioService, bool startPare
     }
     else
     {
-        //已经是root节点
+        // 已经是root节点
     }
 }
 
@@ -66,7 +67,7 @@ uint64_t Scan::getResultsSize()
     return results.size() * relation.size * 8;
 }
 
-void Scan::asyncRun(boost::asio::io_service &ioService)
+void Scan::asyncRun(monsoon::IOManager &ioService)
 {
     cerr << "Scan::run" << endl;
     pendingAsyncOperator = 0;
@@ -129,7 +130,7 @@ bool FilterScan::applyFilter(uint64_t i, FilterInfo &f)
     return false;
 }
 
-void FilterScan::asyncRun(boost::asio::io_service &ioService)
+void FilterScan::asyncRun(monsoon::IOManager &ioService)
 {
     cerr << "FilterScan::run" << endl;
     pendingAsyncOperator = 0;
@@ -137,12 +138,11 @@ void FilterScan::asyncRun(boost::asio::io_service &ioService)
     createAsyncTasks(ioService);
 }
 
-void FilterScan::createAsyncTasks(boost::asio::io_service &ioService)
+void FilterScan::createAsyncTasks(monsoon::IOManager &ioService)
 {
     __sync_synchronize();
     if (isStopped)
     {
-
         finishAsyncRun(ioService, true);
         return;
     }
@@ -232,15 +232,15 @@ void FilterScan::createAsyncTasks(boost::asio::io_service &ioService)
             length++;
             rest--;
         }
-        ioService.post(bind(&FilterScan::filterTask, this, &ioService, i, start, length));
+        ioService.scheduler(bind(&FilterScan::filterTask, this, &ioService, i, start, length));
         start += length;
     }
 }
 
-void FilterScan::filterTask(boost::asio::io_service *ioService, int taskIndex, uint64_t start, uint64_t length)
+void FilterScan::filterTask(monsoon::IOManager *ioService, int taskIndex, uint64_t start, uint64_t length)
 {
-    //atomic_cout << "[tid: " << Utils::GetThreadId() << "] run filtertask " << endl;
-    // 當前為空
+    // atomic_cout << "[tid: " << Utils::GetThreadId() << "] run filtertask " << endl;
+    //  當前為空
     vector<vector<uint64_t>> &localResults = tmpResults[taskIndex];
     unsigned colSize = inputData.size();
     unordered_map<uint64_t, unsigned> cntMap;
@@ -289,7 +289,7 @@ void FilterScan::filterTask(boost::asio::io_service *ioService, int taskIndex, u
             }
             else
             {
-                //count == 2, colSize already contains count column
+                // count == 2, colSize already contains count column
                 for (unsigned cId = 0; cId < colSize; ++cId)
                     localResults[cId].push_back(inputData[cId][i]);
             }
@@ -349,7 +349,7 @@ bool Join::require(SelectInfo info)
     return true;
 }
 //---------------------------------------------------------------------------
-void Join::asyncRun(boost::asio::io_service &ioService)
+void Join::asyncRun(monsoon::IOManager &ioService)
 {
     cerr << "Join::run" << endl;
     pendingAsyncOperator = 2;
@@ -364,7 +364,7 @@ void Join::asyncRun(boost::asio::io_service &ioService)
     right->asyncRun(ioService);
 }
 
-void Join::createAsyncTasks(boost::asio::io_service &ioService)
+void Join::createAsyncTasks(monsoon::IOManager &ioService)
 {
     assert(pendingAsyncOperator == 0);
     __sync_synchronize();
@@ -422,7 +422,7 @@ void Join::createAsyncTasks(boost::asio::io_service &ioService)
     // 计算HASH分区数量，向上取整，得到2的整数次幂
     cntPartition = CNT_PARTITIONS(left->resultSize * 8 * 2, partitionSize); // uint64*2(key, value)
     if (cntPartition < 32)
-        cntPartition = 32; 
+        cntPartition = 32;
     cntPartition = 1 << (Utils::log2(cntPartition - 1) + 1);
     pendingPartitioning = 2;
 
@@ -454,7 +454,7 @@ void Join::createAsyncTasks(boost::asio::io_service &ioService)
     taskRest[0] = left->resultSize % cntTaskLeft;
     taskRest[1] = right->resultSize % cntTaskRight;
 
-    //调整任务长度
+    // 调整任务长度
     if (taskLength[0] < minTuplesPerTask)
     {
         cntTaskLeft = left->resultSize / minTuplesPerTask;
@@ -471,7 +471,7 @@ void Join::createAsyncTasks(boost::asio::io_service &ioService)
         taskLength[1] = right->resultSize / cntTaskRight;
         taskRest[1] = right->resultSize % cntTaskRight;
     }
-    //为直方图预留空间
+    // 为直方图预留空间
     histograms[0].reserve(cntTaskLeft);
     histograms[1].reserve(cntTaskRight);
     for (int i = 0; i < cntTaskLeft; i++)
@@ -497,7 +497,7 @@ void Join::createAsyncTasks(boost::asio::io_service &ioService)
             lengthLeft++;
             restLeft--;
         }
-        ioService.post(bind(&Join::histogramTask, this, &ioService, cntTaskLeft, i, 0, startLeft, lengthLeft)); // for left
+        ioService.scheduler(bind(&Join::histogramTask, this, &ioService, cntTaskLeft, i, 0, startLeft, lengthLeft)); // for left
         startLeft += lengthLeft;
     }
 
@@ -511,14 +511,14 @@ void Join::createAsyncTasks(boost::asio::io_service &ioService)
             lengthRight++;
             restRight--;
         }
-        //执行直方图统计任务，了解数据分布
-        ioService.post(bind(&Join::histogramTask, this, &ioService, cntTaskRight, i, 1, startRight, lengthRight)); // for right
+        // 执行直方图统计任务，了解数据分布
+        ioService.scheduler(bind(&Join::histogramTask, this, &ioService, cntTaskRight, i, 1, startRight, lengthRight)); // for right
         startRight += lengthRight;
     }
 }
 
 //---------------------------------------------------------------------------
-void Join::histogramTask(boost::asio::io_service *ioService, int cntTask, int taskIndex, int leftOrRight, uint64_t start, uint64_t length)
+void Join::histogramTask(monsoon::IOManager *ioService, int cntTask, int taskIndex, int leftOrRight, uint64_t start, uint64_t length)
 {
     vector<Column<uint64_t>> &inputData = !leftOrRight ? left->getResults() : right->getResults();
     Column<uint64_t> &keyColumn = !leftOrRight ? inputData[leftColId] : inputData[rightColId];
@@ -534,15 +534,14 @@ void Join::histogramTask(boost::asio::io_service *ioService, int cntTask, int ta
     }
     int remainder = __sync_sub_and_fetch(&pendingMakingHistogram[leftOrRight * CACHE_LINE_SIZE], 1);
 
-    
-    //所有直方图任务均已完成
+    // 所有直方图任务均已完成
     if (UNLIKELY(remainder == 0))
-    { 
-        //对每个哈希桶进行数据分片
+    {
+        // 对每个哈希桶进行数据分片
         for (int i = 0; i < cntPartition; i++)
         {
             partitionLength[leftOrRight].push_back(0);
-             // 计算每个哈希桶的数据长度，并在必要时进行累加
+            // 计算每个哈希桶的数据长度，并在必要时进行累加
             for (int j = 0; j < cntTask; j++)
             {
                 partitionLength[leftOrRight][i] += histograms[leftOrRight][j][i];
@@ -554,11 +553,11 @@ void Join::histogramTask(boost::asio::io_service *ioService, int cntTask, int ta
         }
         // 如果处理的是右表数据，则准备进行哈希连接的后续操作
         if (leftOrRight == 1)
-        { 
+        {
             resultIndex.push_back(0);
             for (int i = 0; i < cntPartition; i++)
             {
-                 // 计算每个哈希桶的数据长度，并准备用于哈希连接操作
+                // 计算每个哈希桶的数据长度，并准备用于哈希连接操作
                 uint64_t limitRight = partitionLength[1][i];
                 unsigned cntTask = THREAD_NUM;
                 uint64_t taskLength = limitRight / cntTask;
@@ -591,7 +590,7 @@ void Join::histogramTask(boost::asio::io_service *ioService, int cntTask, int ta
                 results.emplace_back(probingResultSize); // For Count Column
             }
         }
-         // 为哈希分区表分配空间
+        // 为哈希分区表分配空间
         auto cntColumns = inputData.size(); // requestedColumns.size();
         uint64_t *partAddress = partitionTable[leftOrRight];
         // partition[leftOrRight][0][0] = partitionTable[leftOrRight];
@@ -619,13 +618,13 @@ void Join::histogramTask(boost::asio::io_service *ioService, int cntTask, int ta
                 length++;
                 rest--;
             }
-            ioService->post(bind(&Join::scatteringTask, this, ioService, i, leftOrRight, start, length));
+            ioService->scheduler(bind(&Join::scatteringTask, this, ioService, i, leftOrRight, start, length));
             start += length;
         }
     }
 }
 
-void Join::scatteringTask(boost::asio::io_service *ioService, int taskIndex, int leftOrRight, uint64_t start, uint64_t length)
+void Join::scatteringTask(monsoon::IOManager *ioService, int taskIndex, int leftOrRight, uint64_t start, uint64_t length)
 {
     vector<Column<uint64_t>> &inputData = !leftOrRight ? left->getResults() : right->getResults();
     Column<uint64_t> &keyColumn = !leftOrRight ? inputData[leftColId] : inputData[rightColId];
@@ -637,7 +636,7 @@ void Join::scatteringTask(boost::asio::io_service *ioService, int taskIndex, int
     {
         goto scattering_finish;
     }
-     // 为每个哈希桶创建插入偏移数组
+    // 为每个哈希桶创建插入偏移数组
     for (int i = 0; i < cntPartition; i++)
     {
         insertOffs.push_back(0);
@@ -647,7 +646,7 @@ void Join::scatteringTask(boost::asio::io_service *ioService, int taskIndex, int
     {
         colIt.push_back(inputData[i].begin(start));
     }
-     // 遍历输入数据，将数据插入到相应的哈希桶中
+    // 遍历输入数据，将数据插入到相应的哈希桶中
     for (uint64_t i = start, limit = start + length; i < limit; i++, ++keyIt)
     {
         uint64_t hashResult = RADIX_HASH(*keyIt, cntPartition);
@@ -669,7 +668,7 @@ void Join::scatteringTask(boost::asio::io_service *ioService, int taskIndex, int
 
 scattering_finish:
     int remainder = __sync_sub_and_fetch(&pendingScattering[leftOrRight * CACHE_LINE_SIZE], 1);
-     //所有哈希分片任务均已完成
+    // 所有哈希分片任务均已完成
     if (UNLIKELY(remainder == 0))
     {
         int remPart = __sync_sub_and_fetch(&pendingPartitioning, 1);
@@ -689,9 +688,9 @@ scattering_finish:
                     subJoinTarget.push_back(i);
                 }
             }
-            //如果没有需要连接的子任务，则完成异步运行
+            // 如果没有需要连接的子任务，则完成异步运行
             if (subJoinTarget.size() == 0)
-            { 
+            {
                 for (unsigned cId = 0; cId < requestedColumns.size(); ++cId)
                 {
                     results[cId].fix();
@@ -727,13 +726,13 @@ scattering_finish:
             __sync_synchronize();
             for (auto &s : subJoinTarget)
             {
-                ioService->post(bind(&Join::buildingTask, this, ioService, s, partition[0][s], partitionLength[0][s], partition[1][s], partitionLength[1][s]));
+                ioService->scheduler(bind(&Join::buildingTask, this, ioService, s, partition[0][s], partitionLength[0][s], partition[1][s], partitionLength[1][s]));
             }
         }
     }
 }
 
-void Join::buildingTask(boost::asio::io_service *ioService, int taskIndex, vector<uint64_t *> localLeft, uint64_t limitLeft, vector<uint64_t *> localRight, uint64_t limitRight)
+void Join::buildingTask(monsoon::IOManager *ioService, int taskIndex, vector<uint64_t *> localLeft, uint64_t limitLeft, vector<uint64_t *> localRight, uint64_t limitRight)
 {
     // 解析分区列
     if (limitLeft > hashThreshold)
@@ -768,7 +767,7 @@ void Join::buildingTask(boost::asio::io_service *ioService, int taskIndex, vecto
             }
         }
     }
-     // 获取探测任务的数量和长度
+    // 获取探测任务的数量和长度
     unsigned cntTask = cntProbing[taskIndex];
     uint64_t taskLength = lengthProbing[taskIndex];
     unsigned rest = restProbing[taskIndex];
@@ -789,7 +788,7 @@ void Join::buildingTask(boost::asio::io_service *ioService, int taskIndex, vecto
             length++;
             rest--;
         }
-        ioService->post(bind(&Join::probingTask, this, ioService, taskIndex, i, localLeft, limitLeft, localRight, start, length));
+        ioService->scheduler(bind(&Join::probingTask, this, ioService, taskIndex, i, localLeft, limitLeft, localRight, start, length));
         start += length;
     }
     uint64_t length = taskLength;
@@ -800,12 +799,12 @@ void Join::buildingTask(boost::asio::io_service *ioService, int taskIndex, vecto
     probingTask(ioService, taskIndex, cntTask - 1, localLeft, limitLeft, localRight, start, length);
 }
 
-void Join::probingTask(boost::asio::io_service *ioService, int partIndex, int taskIndex, vector<uint64_t *> localLeft, uint64_t leftLength, vector<uint64_t *> localRight, uint64_t start, uint64_t length)
+void Join::probingTask(monsoon::IOManager *ioService, int partIndex, int taskIndex, vector<uint64_t *> localLeft, uint64_t leftLength, vector<uint64_t *> localRight, uint64_t start, uint64_t length)
 {
     // 获取右表的键列和左表的键列
     uint64_t *rightKeyColumn = localRight[rightColId];
     uint64_t *leftKeyColumn = localLeft[leftColId];
-     // 存储左表和右表的数据副本
+    // 存储左表和右表的数据副本
     vector<uint64_t *> copyLeftData, copyRightData;
     vector<vector<uint64_t>> &localResults = tmpResults[partIndex][taskIndex];
     uint64_t limit = start + length;
@@ -825,7 +824,7 @@ void Join::probingTask(boost::asio::io_service *ioService, int partIndex, int ta
     if (leftLength == 0 || length == 0)
         goto probing_finish;
 
-     // 根据哈希表的类型，获取哈希表指针
+    // 根据哈希表的类型，获取哈希表指针
     if (cntBuilding)
     {
         hashTableCnt = hashTablesCnt[partIndex];
@@ -844,7 +843,7 @@ void Join::probingTask(boost::asio::io_service *ioService, int partIndex, int ta
     {
         localResults.emplace_back(); // For Count Column
     }
-     // 获取左表和右表请求列的数据副本
+    // 获取左表和右表请求列的数据副本
     for (auto &info : requestedColumnsLeft)
     {
         copyLeftData.push_back(localLeft[left->resolve(info)]);
@@ -866,7 +865,7 @@ void Join::probingTask(boost::asio::io_service *ioService, int partIndex, int ta
     // 如果左表长度大于哈希阈值，则执行哈希连接
     if (leftLength > hashThreshold)
     {
-        //哈希连接
+        // 哈希连接
         if (cntBuilding)
         {
 
@@ -883,14 +882,14 @@ void Join::probingTask(boost::asio::io_service *ioService, int partIndex, int ta
                 uint64_t rightCnt = right->counted ? copyRightData[rightColSize][i] : 1;
                 if (counted == 1)
                 {
-                     // 如果只有一列结果，则直接存储右表的键值和左表的计数乘积
+                    // 如果只有一列结果，则直接存储右表的键值和左表的计数乘积
                     auto data = (leftColSize == 1) ? rightKey : copyRightData[0][i];
                     localResults[0].push_back(data);
                     localResults[1].push_back(leftCnt * rightCnt);
                 }
                 else
                 {
-                    //存储左表的键值、右表请求列的值，以及左右表计数的乘积
+                    // 存储左表的键值、右表请求列的值，以及左右表计数的乘积
                     unsigned relColId = 0;
                     for (unsigned cId = 0; cId < leftColSize; ++cId) // if exist
                         localResults[relColId++].push_back(rightKey);
@@ -903,7 +902,7 @@ void Join::probingTask(boost::asio::io_service *ioService, int partIndex, int ta
                 }
             }
         }
-        else//索引哈希表，则按索引进行匹配
+        else // 索引哈希表，则按索引进行匹配
         {
             for (uint64_t i = start; i < limit; i++)
             {
@@ -1041,7 +1040,7 @@ bool SelfJoin::require(SelectInfo info)
     return false;
 }
 //---------------------------------------------------------------------------
-void SelfJoin::asyncRun(boost::asio::io_service &ioService)
+void SelfJoin::asyncRun(monsoon::IOManager &ioService)
 {
     cerr << "Self::run" << endl;
     pendingAsyncOperator = 1;
@@ -1051,7 +1050,7 @@ void SelfJoin::asyncRun(boost::asio::io_service &ioService)
     input->asyncRun(ioService);
 }
 //---------------------------------------------------------------------------
-void SelfJoin::selfJoinTask(boost::asio::io_service *ioService, int taskIndex, uint64_t start, uint64_t length)
+void SelfJoin::selfJoinTask(monsoon::IOManager *ioService, int taskIndex, uint64_t start, uint64_t length)
 {
     auto &inputData = input->getResults();
     vector<vector<uint64_t>> &localResults = tmpResults[taskIndex];
@@ -1140,7 +1139,7 @@ void SelfJoin::selfJoinTask(boost::asio::io_service *ioService, int taskIndex, u
     }
 }
 //---------------------------------------------------------------------------
-void SelfJoin::createAsyncTasks(boost::asio::io_service &ioService)
+void SelfJoin::createAsyncTasks(monsoon::IOManager &ioService)
 {
     assert(pendingAsyncOperator == 0);
 
@@ -1206,12 +1205,12 @@ void SelfJoin::createAsyncTasks(boost::asio::io_service &ioService)
             length++;
             rest--;
         }
-        ioService.post(bind(&SelfJoin::selfJoinTask, this, &ioService, i, start, length));
+        ioService.scheduler(bind(&SelfJoin::selfJoinTask, this, &ioService, i, start, length));
         start += length;
     }
 }
 //---------------------------------------------------------------------------
-void Checksum::asyncRun(boost::asio::io_service &ioService, int queryIndex)
+void Checksum::asyncRun(monsoon::IOManager &ioService, int queryIndex)
 {
     cerr << "checksum::run-->";
     this->queryIndex = queryIndex;
@@ -1225,7 +1224,7 @@ void Checksum::asyncRun(boost::asio::io_service &ioService, int queryIndex)
 }
 //---------------------------------------------------------------------------
 
-void Checksum::checksumTask(boost::asio::io_service *ioService, int taskIndex, uint64_t start, uint64_t length)
+void Checksum::checksumTask(monsoon::IOManager *ioService, int taskIndex, uint64_t start, uint64_t length)
 {
     auto &inputData = input->getResults();
 
@@ -1261,7 +1260,7 @@ void Checksum::checksumTask(boost::asio::io_service *ioService, int taskIndex, u
     }
 }
 
-void Checksum::createAsyncTasks(boost::asio::io_service &ioService)
+void Checksum::createAsyncTasks(monsoon::IOManager &ioService)
 {
     assert(pendingAsyncOperator == 0);
     for (auto &sInfo : colInfo)
@@ -1298,11 +1297,12 @@ void Checksum::createAsyncTasks(boost::asio::io_service &ioService)
             length++;
             rest--;
         }
-        ioService.post(bind(&Checksum::checksumTask, this, &ioService, i, start, length));
+        //ioService.post(bind(&Checksum::checksumTask, this, &ioService, i, start, length));
+        ioService.scheduler(std::bind(&Checksum::checksumTask, this, &ioService, i, start, length));
         start += length;
     }
 }
-void Checksum::finishAsyncRun(boost::asio::io_service &ioService, bool startParentAsync)
+void Checksum::finishAsyncRun(monsoon::IOManager &ioService, bool startParentAsync)
 {
     joiner.asyncResults[queryIndex] = std::move(checkSums);
     int pending = __sync_sub_and_fetch(&joiner.pendingAsyncJoin, 1);

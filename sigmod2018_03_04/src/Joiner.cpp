@@ -39,6 +39,7 @@ void Joiner::waitAsyncJoins()
     }
 }
 
+// no use
 vector<string> Joiner::getAsyncJoinResults()
 {
     vector<string> results;
@@ -59,7 +60,7 @@ vector<string> Joiner::getAsyncJoinResults()
 
     asyncResults.clear();
     //    tmp.insert(tmp.end(), asyncJoins.begin(), asyncJoins.end());
-    ioService.post(bind([](vector<shared_ptr<Checksum>> ops) {}, asyncJoins)); // gc, asynchronous discount shared pointer and release
+    // ioService.post(bind([](vector<shared_ptr<Checksum>> ops) {}, asyncJoins)); // gc, asynchronous discount shared pointer and release
     asyncJoins.clear();
     nextQueryIndex = 0;
 
@@ -142,7 +143,7 @@ void Joiner::join(QueryInfo &query, int queryIndex)
     left->setParent(root);
     right->setParent(root);
 
-    cerr << "query size: "<<query.predicates.size() << endl;
+    cerr << "query size: " << query.predicates.size() << endl;
 
     for (unsigned i = 1; i < query.predicates.size(); ++i)
     {
@@ -191,7 +192,7 @@ void Joiner::join(QueryInfo &query, int queryIndex)
     root->setParent(checkSum);
     asyncJoins[queryIndex] = checkSum;
     // 执行计划
-    checkSum->asyncRun(ioService, queryIndex);
+    checkSum->asyncRun(*ioms, queryIndex);
 }
 //---------------------------------------------------------------------------
 void Joiner::createAsyncQueryTask(string line)
@@ -202,7 +203,7 @@ void Joiner::createAsyncQueryTask(string line)
     asyncJoins.emplace_back();
     asyncResults.emplace_back();
 
-    ioService.post(bind(&Joiner::join, this, query, nextQueryIndex));
+    ioms->scheduler(bind(&Joiner::join, this, query, nextQueryIndex));
     __sync_fetch_and_add(&nextQueryIndex, 1);
 }
 //---------------------------------------------------------------------------
@@ -212,7 +213,7 @@ void Joiner::loadStat()
     {
         for (unsigned i = 0; i < r.columns.size(); ++i)
         {
-            ioService.post(bind(&Relation::loadStat, &r, i));
+            ioms->scheduler(bind(&Relation::loadStat, &r, i));
         }
     }
     while (1)

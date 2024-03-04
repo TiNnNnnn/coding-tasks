@@ -6,9 +6,8 @@
 #include "Relation.h"
 #include "Parser.h"
 #include "Utils.h"
+#include "monsoon.h"
 #include <condition_variable>
-#include <boost/asio/io_service.hpp>
-#include <boost/thread/thread.hpp>
 #include "ThreadPool.h"
 #include <thread>
 #include <atomic>
@@ -23,8 +22,7 @@ private:
     std::shared_ptr<Operator> addScan(std::set<unsigned> &usedRelations, SelectInfo &info, QueryInfo &query);
     ThreadPool *threadPool;
 
-    boost::asio::io_service ioService;
-    boost::asio::io_service::work work;
+    monsoon::IOManager *ioms;
 
     int pendingAsyncJoin = 0;
     int nextQueryIndex = 0;
@@ -50,7 +48,6 @@ private:
 
 public:
     Joiner(int threadNum)
-        : work(ioService)
     {
         threadPool = new ThreadPool(threadNum);
 
@@ -58,19 +55,21 @@ public:
         asyncJoins.reserve(100);
         localMemPool = new MemoryPool *[THREAD_NUM];
 
+        ioms = new monsoon::IOManager(THREAD_NUM, true);
+
         for (int i = 0; i < threadNum; i++)
         {
             threadPool->addTask([&]()
                                 {
-                    tid = __sync_fetch_and_add(&nextTid, 1);
-                    localMemPool[tid] = new MemoryPool(4*1024*1024*1024lu, 4096);
-                    ioService.run(); });
+                                    tid = __sync_fetch_and_add(&nextTid, 1);
+                                    localMemPool[tid] = new MemoryPool(4 * 1024 * 1024 * 1024lu, 4096);
+                                });
         }
 
         cntTouch = 0;
         for (int i = 0; i < threadNum; i++)
         {
-            ioService.post(bind(&Joiner::touchBuf, this, i));
+            ioms->scheduler(bind(&Joiner::touchBuf, this, i));
         }
         while (cntTouch < threadNum)
         {
@@ -78,7 +77,7 @@ public:
         }
         for (int i = 0; i < threadNum; i++)
         {
-            ioService.post(bind(&Joiner::clearBuf, this, i));
+            ioms->scheduler(bind(&Joiner::clearBuf, this, i));
         }
     }
     /// The relations that might be joined
@@ -100,7 +99,6 @@ public:
     void createAsyncQueryTask(std::string line);
     ~Joiner()
     {
-        ioService.stop();
         threadPool->~ThreadPool();
         for (int i = 0; i < THREAD_NUM; i++)
         {
