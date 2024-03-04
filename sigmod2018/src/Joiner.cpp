@@ -59,7 +59,7 @@ vector<string> Joiner::getAsyncJoinResults()
 
     asyncResults.clear();
     //    tmp.insert(tmp.end(), asyncJoins.begin(), asyncJoins.end());
-    ioService.post(bind([](vector<shared_ptr<Checksum>> ops) {}, asyncJoins)); // gc, asynchronous discount shared pointer and release
+    //ioService.post(bind([](vector<shared_ptr<Checksum>> ops) {}, asyncJoins)); // gc, asynchronous discount shared pointer and release
     asyncJoins.clear();
     nextQueryIndex = 0;
 
@@ -191,7 +191,7 @@ void Joiner::join(QueryInfo &query, int queryIndex)
     root->setParent(checkSum);
     asyncJoins[queryIndex] = checkSum;
     // 执行计划
-    checkSum->asyncRun(ioService, queryIndex);
+    checkSum->asyncRun(ioms[0], queryIndex);
 }
 //---------------------------------------------------------------------------
 void Joiner::createAsyncQueryTask(string line)

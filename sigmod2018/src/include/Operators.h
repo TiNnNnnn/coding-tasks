@@ -7,15 +7,14 @@
 #include <unordered_set>
 #include <vector>
 #include <set>
-#include <boost/asio/io_service.hpp>
 #include <boost/bind.hpp>
-#include <boost/thread/thread.hpp>
 #include <mutex>
 #include "Relation.h"
 #include "Parser.h"
 #include "Config.h"
 #include "Utils.h"
 #include "Column.h"
+#include "monsoon.h"
 
 class Joiner;
 
@@ -42,14 +41,14 @@ protected:
     /// The materialized results
     std::vector<Column<uint64_t>> results;
     int pendingAsyncOperator = -1;
-    virtual void finishAsyncRun(boost::asio::io_service &ioService, bool startParentAsync = false);
+    virtual void finishAsyncRun(monsoon::IOManager &ioService, bool startParentAsync = false);
 
 public:
-    //0:未进行统计, 
-    //1: 需要进行新统计
-    //2: 已经统计（按照子节点统计结果即可）
-    int counted = 0;        
-    bool isStopped = false; 
+    // 0:未进行统计,
+    // 1: 需要进行新统计
+    // 2: 已经统计（按照子节点统计结果即可）
+    int counted = 0;
+    bool isStopped = false;
     /// Require a column and add it to results
     virtual bool require(SelectInfo info) = 0;
     /// Resolves a column
@@ -59,9 +58,9 @@ public:
         return select2ResultColId[info];
     }
     /// AsyncRun
-    virtual void asyncRun(boost::asio::io_service &ioService) = 0;
+    virtual void asyncRun(monsoon::IOManager &ioService) = 0;
     /// only call it if pendingAsyncOperator=0, and can getResults()
-    virtual void createAsyncTasks(boost::asio::io_service &ioService) { throw; }
+    virtual void createAsyncTasks(monsoon::IOManager &ioService) { throw; }
     /// SetParnet
     void setParent(std::shared_ptr<Operator> parent) { this->parent = parent; }
     /// Get  materialized results
@@ -98,7 +97,7 @@ public:
     /// Require a column and add it to results
     bool require(SelectInfo info) override;
     /// AsyncRun
-    virtual void asyncRun(boost::asio::io_service &ioService) override;
+    virtual void asyncRun(monsoon::IOManager &ioService) override;
     virtual uint64_t getResultsSize() override;
     // Print async info
     virtual void printAsyncInfo() override;
@@ -121,7 +120,7 @@ class FilterScan : public Scan
 
     unsigned minTuplesPerTask = 1000;
 
-    void filterTask(boost::asio::io_service *ioService, int taskIndex, uint64_t start, uint64_t length);
+    void filterTask(monsoon::IOManager *ioService, int taskIndex, uint64_t start, uint64_t length);
 
 public:
     /// The constructor
@@ -131,9 +130,9 @@ public:
     /// Require a column and add it to results
     bool require(SelectInfo info) override;
     /// AsyncRun
-    virtual void asyncRun(boost::asio::io_service &ioService) override;
+    virtual void asyncRun(monsoon::IOManager &ioService) override;
     /// only call it if pendingAsyncOperator=0, and can getResults()
-    virtual void createAsyncTasks(boost::asio::io_service &ioService) override;
+    virtual void createAsyncTasks(monsoon::IOManager &ioService) override;
     /// create sync test
     virtual uint64_t getResultsSize() override { return Operator::getResultsSize(); }
     // Print async info
@@ -191,18 +190,18 @@ private:
     // 是否正在构建哈希表
     bool cntBuilding = false;
 
-private:    
+private:
     /// Copy tuple to result
     void copy2Result(uint64_t leftId, uint64_t rightId);
     /// Create mapping for bindings
     void createMappingForBindings();
-   
-    void histogramTask(boost::asio::io_service *ioService, int cntTask, int taskIndex, int leftOrRight, uint64_t start, uint64_t length);
-    void scatteringTask(boost::asio::io_service *ioService, int taskIndex, int leftOrRight, uint64_t start, uint64_t length);
+
+    void histogramTask(monsoon::IOManager *ioService, int cntTask, int taskIndex, int leftOrRight, uint64_t start, uint64_t length);
+    void scatteringTask(monsoon::IOManager *ioService, int taskIndex, int leftOrRight, uint64_t start, uint64_t length);
     // for cache, partition must be allocated sequentially
     // void subJoinTask(boost::asio::io_service* ioService, int taskIndex, std::vector<uint64_t*> left, uint64_t leftLimit, std::vector<uint64_t*> right, uint64_t rightLimit);
-    void buildingTask(boost::asio::io_service *ioService, int taskIndex, std::vector<uint64_t *> left, uint64_t leftLimit, std::vector<uint64_t *> right, uint64_t rightLimit);
-    void probingTask(boost::asio::io_service *ioService, int partIndex, int taskIndex, std::vector<uint64_t *> left, uint64_t leftLength, std::vector<uint64_t *> right, uint64_t start, uint64_t length);
+    void buildingTask(monsoon::IOManager *ioService, int taskIndex, std::vector<uint64_t *> left, uint64_t leftLimit, std::vector<uint64_t *> right, uint64_t rightLimit);
+    void probingTask(monsoon::IOManager *ioService, int partIndex, int taskIndex, std::vector<uint64_t *> left, uint64_t leftLength, std::vector<uint64_t *> right, uint64_t start, uint64_t length);
 
     /// Columns that have to be materialized
     std::unordered_set<SelectInfo> requestedColumns;
@@ -220,9 +219,9 @@ public:
     /// Require a column and add it to results
     bool require(SelectInfo info) override;
     /// AsyncRun
-    virtual void asyncRun(boost::asio::io_service &ioService) override;
+    virtual void asyncRun(monsoon::IOManager &ioService) override;
     /// only call it if pendingAsyncOperator=0, and can getResults()
-    virtual void createAsyncTasks(boost::asio::io_service &ioService) override;
+    virtual void createAsyncTasks(monsoon::IOManager &ioService) override;
     // Print async info
     virtual void printAsyncInfo() override;
     /// stop all children
@@ -254,7 +253,7 @@ class SelfJoin : public Operator
     std::vector<Column<uint64_t> *> copyData;
     int pendingTask = -1;
     unsigned minTuplesPerTask = 1000;
-    void selfJoinTask(boost::asio::io_service *ioService, int taskIndex, uint64_t start, uint64_t length);
+    void selfJoinTask(monsoon::IOManager *ioService, int taskIndex, uint64_t start, uint64_t length);
 
 public:
     /// The constructor
@@ -262,9 +261,9 @@ public:
     /// Require a column and add it to results
     bool require(SelectInfo info) override;
     /// AsyncRun
-    virtual void asyncRun(boost::asio::io_service &ioService) override;
+    virtual void asyncRun(monsoon::IOManager &ioService) override;
     /// only call it if pendingAsyncOperator=0, and can getResults()
-    virtual void createAsyncTasks(boost::asio::io_service &ioService) override;
+    virtual void createAsyncTasks(monsoon::IOManager &ioService) override;
     // Print async info
     virtual void printAsyncInfo() override;
 };
@@ -281,7 +280,7 @@ class Checksum : public Operator
 
     int pendingTask = -1;
     unsigned minTuplesPerTask = 1000;
-    void checksumTask(boost::asio::io_service *ioService, int taskIndex, uint64_t start, uint64_t length);
+    void checksumTask(monsoon::IOManager *ioService, int taskIndex, uint64_t start, uint64_t length);
 
 public:
     std::vector<uint64_t> checkSums;
@@ -290,12 +289,12 @@ public:
     /// Request a column and add it to results
     bool require(SelectInfo info) override { throw; /* check sum is always on the highest level and thus should never request anything */ }
     /// AsyncRun
-    virtual void asyncRun(boost::asio::io_service &ioService, int queryIndex);
-    virtual void asyncRun(boost::asio::io_service &ioService) {}
+    virtual void asyncRun(monsoon::IOManager &ioService, int queryIndex);
+    virtual void asyncRun(monsoon::IOManager &ioService) {}
     /// only call it if pendingAsyncOperator=0, and can getResults()
-    virtual void createAsyncTasks(boost::asio::io_service &ioService) override;
+    virtual void createAsyncTasks(monsoon::IOManager &ioService) override;
     /// root node register result value to joiner
-    virtual void finishAsyncRun(boost::asio::io_service &ioService, bool startParentAsync = false) override;
+    virtual void finishAsyncRun(monsoon::IOManager &ioService, bool startParentAsync = false) override;
     // Print async info
     virtual void printAsyncInfo() override;
 };
