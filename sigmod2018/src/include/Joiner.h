@@ -9,6 +9,7 @@
 #include <condition_variable>
 #include <boost/asio/io_service.hpp>
 #include <boost/thread/thread.hpp>
+#include "ThreadPool.h"
 #include <thread>
 #include <atomic>
 
@@ -20,9 +21,9 @@ private:
     friend Checksum;
     /// Add scan to query
     std::shared_ptr<Operator> addScan(std::set<unsigned> &usedRelations, SelectInfo &info, QueryInfo &query);
+    ThreadPool *threadPool;
 
     boost::asio::io_service ioService;
-    boost::thread_group threadPool;
     boost::asio::io_service::work work;
 
     int pendingAsyncJoin = 0;
@@ -35,6 +36,7 @@ private:
 
     char *buf[THREAD_NUM];
     int cntTouch;
+
 private:
     void touchBuf(int i)
     {
@@ -47,16 +49,19 @@ private:
     }
 
 public:
-    Joiner(int threadNum) : work(ioService)
+    Joiner(int threadNum)
+        : work(ioService)
     {
+        threadPool = new ThreadPool(threadNum);
+
         asyncResults.reserve(100);
         asyncJoins.reserve(100);
         localMemPool = new MemoryPool *[THREAD_NUM];
 
         for (int i = 0; i < threadNum; i++)
         {
-            threadPool.create_thread([&]()
-                                     {
+            threadPool->addTask([&]()
+                                {
                     tid = __sync_fetch_and_add(&nextTid, 1);
                     localMemPool[tid] = new MemoryPool(4*1024*1024*1024lu, 4096);
                     ioService.run(); });
@@ -96,7 +101,7 @@ public:
     ~Joiner()
     {
         ioService.stop();
-        threadPool.join_all();
+        threadPool->~ThreadPool();
         for (int i = 0; i < THREAD_NUM; i++)
         {
             delete localMemPool[i];
