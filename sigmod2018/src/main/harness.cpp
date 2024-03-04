@@ -198,28 +198,9 @@ int main(int argc, char *argv[])
         perror("write");
         exit(EXIT_FAILURE);
     }
-
-#if 1
+    
     // Wait for 1 second
     this_thread::sleep_for(1s);
-
-#else
-    // Wait for the ready signal
-    char status_buffer[6];
-    status_bytes = read_bytes(stdout_pipe[0], status_buffer, sizeof(status_buffer));
-    if (status_bytes < 0)
-    {
-        perror("read");
-        exit(EXIT_FAILURE);
-    }
-
-    if (status_bytes != sizeof(status_buffer) || (status_buffer[0] != 'R' && status_buffer[0] != 'r') ||
-        status_buffer[5] != '\n')
-    {
-        cerr << "Test program did not return ready status" << endl;
-        exit(EXIT_FAILURE);
-    }
-#endif
 
     // Use select with non-blocking files to read and write from the child process, avoiding deadlocks
     if (set_nonblocking(stdout_pipe[0]) == -1)

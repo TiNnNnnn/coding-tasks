@@ -113,7 +113,7 @@ namespace monsoon
         int ret = epoll_ctl(epfd_, op, fd, &epevent);
         if (ret)
         {
-            std::cout << "addevent: epoll ctl error" << std::endl;
+            std::cerr << "addevent: epoll ctl error" << std::endl;
             return -1;
         }
         // 待执行IO事件数量
@@ -137,7 +137,7 @@ namespace monsoon
             event_ctx.fiber = Fiber::GetThis();
             CondPanic(event_ctx.fiber->getState() == Fiber::RUNNING, "state=" + event_ctx.fiber->getState());
         }
-        std::cout << "add event success,fd = " << fd << std::endl;
+        //std::cout << "add event success,fd = " << fd << std::endl;
         return 0;
     }
     // 删除事件 (删除前不会主动触发事件)
@@ -167,7 +167,7 @@ namespace monsoon
         int ret = epoll_ctl(epfd_, op, fd, &epevent);
         if (ret)
         {
-            std::cout << "delevent: epoll_ctl error" << std::endl;
+            std::cerr << "delevent: epoll_ctl error" << std::endl;
             return false;
         }
         --pendingEventCnt_;
@@ -204,7 +204,7 @@ namespace monsoon
         int ret = epoll_ctl(epfd_, op, fd, &epevent);
         if (ret)
         {
-            std::cout << "delevent: epoll_ctl error" << std::endl;
+            std::cerr << "delevent: epoll_ctl error" << std::endl;
             return false;
         }
         // 删除之前，触发以此事件
@@ -238,7 +238,7 @@ namespace monsoon
         int ret = epoll_ctl(epfd_, op, fd, &epevent);
         if (ret)
         {
-            std::cout << "delevent: epoll_ctl error" << std::endl;
+            std::cerr << "delevent: epoll_ctl error" << std::endl;
             return false;
         }
         // 触发全部已注册事件
@@ -293,7 +293,7 @@ namespace monsoon
             uint64_t next_timeout = 0;
             if (stopping(next_timeout))
             {
-                std::cout << "name=" << getName() << "idle stopping exit";
+                std::cerr << "name=" << getName() << "idle stopping exit";
                 break;
             }
 
@@ -321,7 +321,7 @@ namespace monsoon
                         // 系统调用被信号中断
                         continue;
                     }
-                    std::cout << "epoll_wait [" << epfd_ << "] errno,err: " << errno << std::endl;
+                    std::cerr << "epoll_wait [" << epfd_ << "] errno,err: " << errno << std::endl;
                     break;
                 }
                 else
@@ -362,7 +362,7 @@ namespace monsoon
                 // 错误事件 or 挂起事件(对端关闭)
                 if (event.events & (EPOLLERR | EPOLLHUP))
                 {
-                    std::cout << "error events" << std::endl;
+                    std::cerr << "error events" << std::endl;
                     event.events |= (EPOLLIN | EPOLLOUT) & fd_ctx->events;
                 }
                 // 实际发生的事件类型
@@ -390,7 +390,7 @@ namespace monsoon
                 int ret2 = epoll_ctl(epfd_, op, fd_ctx->fd, &event);
                 if (ret2)
                 {
-                    std::cout << "epoll_wait [" << epfd_ << "] errno,err: " << errno << std::endl;
+                    std::cerr << "epoll_wait [" << epfd_ << "] errno,err: " << errno << std::endl;
                     continue;
                 }
                 // 处理已就绪事件 （加入scheduler tasklist,未调度执行）

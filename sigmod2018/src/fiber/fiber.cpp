@@ -32,7 +32,7 @@ namespace monsoon
         CondPanic(getcontext(&ctx_) == 0, "getcontext error");
         ++fiber_count;
         id_ = cur_fiber_id++;
-        std::cout << "[fiber] create fiber , id = " << id_ << std::endl;
+        //std::cout << "[fiber] create fiber , id = " << id_ << std::endl;
         //",backtrace:\n"<< BacktraceToString(6, 3, "") << std::endl;
     }
 
@@ -71,7 +71,7 @@ namespace monsoon
 
         // std::cout << "create son fiber , id = " << id_ << ",backtrace:\n"
         //           << BacktraceToString(6, 3, "") << std::endl;
-        std::cout << "[fiber]create son fiber , id = " << id_ << std::endl;
+        //std::cout << "[fiber]create son fiber , id = " << id_ << std::endl;
     }
 
     // 切换当前协程到执行态,并保存主协程的上下文

@@ -89,17 +89,17 @@ void Relation::loadRelation(const char *fileName)
 
     this->size = *reinterpret_cast<uint64_t *>(addr);
     addr += sizeof(size);
-    cerr << "size=" << size;
+    //cerr << "size=" << size;
     auto numColumns = *reinterpret_cast<size_t *>(addr);
     addr += sizeof(size_t);
-    cerr << " |cols=" << numColumns;
+    //cerr << " |cols=" << numColumns;
     for (unsigned i = 0; i < numColumns; ++i)
     {
         this->columns.push_back(reinterpret_cast<uint64_t *>(addr));
-        cerr << " |" << *columns[i] << " ";
+        //cerr << " |" << *columns[i] << " ";
         addr += size * sizeof(uint64_t);
     }
-    cerr << endl;
+    //cerr << endl;
     needCount.resize(numColumns, -1);
     counted.resize(numColumns);
 }

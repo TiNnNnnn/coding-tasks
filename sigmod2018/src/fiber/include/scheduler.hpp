@@ -90,7 +90,7 @@ namespace monsoon
             //     tp = "[Fiber]";
             // }
             // std::cout << "[scheduler] add scheduler task: " << tp << " success" << std::endl;
-            std::cout << "[scheduler] add scheduler task success" << std::endl;
+            //std::cout << "[scheduler] add scheduler task success" << std::endl;
         }
         // 启动调度器
         void start();

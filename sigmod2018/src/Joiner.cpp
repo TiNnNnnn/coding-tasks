@@ -59,7 +59,7 @@ vector<string> Joiner::getAsyncJoinResults()
 
     asyncResults.clear();
     //    tmp.insert(tmp.end(), asyncJoins.begin(), asyncJoins.end());
-    //ioService.post(bind([](vector<shared_ptr<Checksum>> ops) {}, asyncJoins)); // gc, asynchronous discount shared pointer and release
+    // ioService.post(bind([](vector<shared_ptr<Checksum>> ops) {}, asyncJoins)); // gc, asynchronous discount shared pointer and release
     asyncJoins.clear();
     nextQueryIndex = 0;
 
@@ -117,23 +117,24 @@ static QueryGraphProvides analyzeInputOfJoin(set<unsigned> &usedRelations, Selec
 void Joiner::join(QueryInfo &query, int queryIndex)
 // Executes a join query
 {
-    cerr << query.dumpText() << endl;
+    //cerr << query.dumpText() << endl;
     set<unsigned> usedRelations;
     // We always start with the first join predicate and append the other joins to it (--> left-deep join trees)
     // You might want to choose a smarter join ordering ...
     auto &firstJoin = query.predicates[0];
-    for (int i = 0; i < query.predicates.size(); i++)
-    {
-        cerr << "{";
-        cerr << query.predicates[i].left.relId << " ";
-        cerr << query.predicates[i].left.binding << " ";
-        cerr << query.predicates[i].left.colId << " |";
-        cerr << query.predicates[i].right.relId << " ";
-        cerr << query.predicates[i].right.binding << " ";
-        cerr << query.predicates[i].right.colId << " ";
-        cerr << "}";
-    }
-    cerr << endl;
+
+    // for (int i = 0; i < query.predicates.size(); i++)
+    // {
+    //     cerr << "{";
+    //     cerr << query.predicates[i].left.relId << " ";
+    //     cerr << query.predicates[i].left.binding << " ";
+    //     cerr << query.predicates[i].left.colId << " |";
+    //     cerr << query.predicates[i].right.relId << " ";
+    //     cerr << query.predicates[i].right.binding << " ";
+    //     cerr << query.predicates[i].right.colId << " ";
+    //     cerr << "}";
+    // }
+    // cerr << endl;
 
     auto left = addScan(usedRelations, firstJoin.left, query);
     auto right = addScan(usedRelations, firstJoin.right, query);
@@ -142,7 +143,7 @@ void Joiner::join(QueryInfo &query, int queryIndex)
     left->setParent(root);
     right->setParent(root);
 
-    cerr << "query size: "<<query.predicates.size() << endl;
+    //cerr << "query size: " << query.predicates.size() << endl;
 
     for (unsigned i = 1; i < query.predicates.size(); ++i)
     {
@@ -154,7 +155,7 @@ void Joiner::join(QueryInfo &query, int queryIndex)
         switch (analyzeInputOfJoin(usedRelations, leftInfo, rightInfo))
         {
         case QueryGraphProvides::Left:
-            cerr << "Left" << endl;
+            //cerr << "Left" << endl;
             left = root;
             right = addScan(usedRelations, rightInfo, query);
             root = make_shared<Join>(left, right, pInfo);
@@ -162,7 +163,7 @@ void Joiner::join(QueryInfo &query, int queryIndex)
             right->setParent(root);
             break;
         case QueryGraphProvides::Right:
-            cerr << "Right" << endl;
+            //cerr << "Right" << endl;
             left = addScan(usedRelations, leftInfo, query);
             right = root;
             root = make_shared<Join>(left, right, pInfo);
@@ -170,7 +171,7 @@ void Joiner::join(QueryInfo &query, int queryIndex)
             right->setParent(root);
             break;
         case QueryGraphProvides::Both:
-            cerr << "Both" << endl;
+            //cerr << "Both" << endl;
             // All relations of this join are already used somewhere else in the query.
             // Thus, we have either a cycle in our join graph or more than one join predicate per join.
             left = root;
@@ -178,7 +179,7 @@ void Joiner::join(QueryInfo &query, int queryIndex)
             left->setParent(root);
             break;
         case QueryGraphProvides::None:
-            cerr << "None" << endl;
+            //cerr << "None" << endl;
             // Process this predicate later when we can connect it to the other joins
             // We never have cross products
             query.predicates.push_back(pInfo);
@@ -191,7 +192,7 @@ void Joiner::join(QueryInfo &query, int queryIndex)
     root->setParent(checkSum);
     asyncJoins[queryIndex] = checkSum;
     // 执行计划
-    checkSum->asyncRun(ioms[0], queryIndex);
+    checkSum->asyncRun(*ioms, queryIndex);
 }
 //---------------------------------------------------------------------------
 void Joiner::createAsyncQueryTask(string line)
@@ -202,7 +203,7 @@ void Joiner::createAsyncQueryTask(string line)
     asyncJoins.emplace_back();
     asyncResults.emplace_back();
 
-    ioService.post(bind(&Joiner::join, this, query, nextQueryIndex));
+    ioms->scheduler(bind(&Joiner::join, this, query, nextQueryIndex));
     __sync_fetch_and_add(&nextQueryIndex, 1);
 }
 //---------------------------------------------------------------------------
@@ -212,7 +213,7 @@ void Joiner::loadStat()
     {
         for (unsigned i = 0; i < r.columns.size(); ++i)
         {
-            ioService.post(bind(&Relation::loadStat, &r, i));
+            ioms->scheduler(bind(&Relation::loadStat, &r, i));
         }
     }
     while (1)

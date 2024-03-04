@@ -69,7 +69,7 @@ uint64_t Scan::getResultsSize()
 
 void Scan::asyncRun(monsoon::IOManager &ioService)
 {
-    cerr << "Scan::run" << endl;
+    //cerr << "Scan::run" << endl;
     pendingAsyncOperator = 0;
     // 如果只有一列且之前已经进行了元素统计
     if (infos.size() == 1 && !relation.counted[infos[0].colId].empty())
@@ -132,7 +132,7 @@ bool FilterScan::applyFilter(uint64_t i, FilterInfo &f)
 
 void FilterScan::asyncRun(monsoon::IOManager &ioService)
 {
-    cerr << "FilterScan::run" << endl;
+    //cerr << "FilterScan::run" << endl;
     pendingAsyncOperator = 0;
     __sync_synchronize();
     createAsyncTasks(ioService);
@@ -352,16 +352,16 @@ bool Join::require(SelectInfo info)
 //---------------------------------------------------------------------------
 void Join::asyncRun(monsoon::IOManager &ioService)
 {
-    cerr << "Join::run" << endl;
+    //cerr << "Join::run" << endl;
     pendingAsyncOperator = 2;
     // 请求左右节点的待处理列
     left->require(pInfo.left);
     right->require(pInfo.right);
     __sync_synchronize();
     // 分别执行左右节点
-    cerr << "Join left-->";
+    //cerr << "Join left-->";
     left->asyncRun(ioService);
-    cerr << "Join right-->";
+    //cerr << "Join right-->";
     right->asyncRun(ioService);
 }
 
@@ -1043,7 +1043,7 @@ bool SelfJoin::require(SelectInfo info)
 //---------------------------------------------------------------------------
 void SelfJoin::asyncRun(monsoon::IOManager &ioService)
 {
-    cerr << "Self::run" << endl;
+    //cerr << "Self::run" << endl;
     pendingAsyncOperator = 1;
     input->require(pInfo.left);
     input->require(pInfo.right);
@@ -1213,7 +1213,7 @@ void SelfJoin::createAsyncTasks(monsoon::IOManager &ioService)
 //---------------------------------------------------------------------------
 void Checksum::asyncRun(monsoon::IOManager &ioService, int queryIndex)
 {
-    cerr << "checksum::run-->";
+    //cerr << "checksum::run-->";
     this->queryIndex = queryIndex;
     pendingAsyncOperator = 1;
     for (auto &sInfo : colInfo)

@@ -137,7 +137,7 @@ namespace monsoon
             int rt = iom->addEvent(fd, (Event)(event));
             if (rt)
             {
-                std::cout << hook_fun_name << " addEvent(" << fd << ", " << event << ")";
+                //std::cout << hook_fun_name << " addEvent(" << fd << ", " << event << ")";
                 if (timer)
                 {
                     timer->cancel();
@@ -316,7 +316,7 @@ namespace monsoon
                 {
                     timer->cancel();
                 }
-                std::cout << "connect addEvent(" << fd << ", WRITE) error" << std::endl;
+                //std::cout << "connect addEvent(" << fd << ", WRITE) error" << std::endl;
             }
 
             int error = 0;

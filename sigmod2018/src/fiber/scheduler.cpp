@@ -21,18 +21,18 @@ namespace monsoon
         // use_caller:是否将当前线程也作为被调度线程
         if (use_caller)
         {
-            std::cout << LOG_HEAD << "current thread as called thread" << std::endl;
+            //std::cout << LOG_HEAD << "current thread as called thread" << std::endl;
             // 总线程数减1
             --threads;
             // 初始化caller线程的主协程
             Fiber::GetThis();
-            std::cout << LOG_HEAD << "init caller thread's main fiber success" << std::endl;
+            //std::cout << LOG_HEAD << "init caller thread's main fiber success" << std::endl;
             CondPanic(GetThis() == nullptr, "GetThis err:cur scheduler is not nullptr");
             // 设置当前线程为调度器线程（caller thread）
             cur_scheduler = this;
             // 初始化当前线程的调度协程 （该线程不会被调度器带哦都），调度结束后，返回主协程
             rootFiber_.reset(new Fiber(std::bind(&Scheduler::run, this), 0, false));
-            std::cout << LOG_HEAD << "init caller thread's caller fiber success" << std::endl;
+            //std::cout << LOG_HEAD << "init caller thread's caller fiber success" << std::endl;
 
             Thread::SetName(name_);
             cur_scheduler_fiber = rootFiber_.get();
@@ -44,7 +44,7 @@ namespace monsoon
             rootThread_ = -1;
         }
         threadCnt_ = threads;
-        std::cout << "-------scheduler init success-------" << std::endl;
+        //std::cout << "-------scheduler init success-------" << std::endl;
     }
 
     Scheduler *Scheduler::GetThis()
@@ -72,11 +72,11 @@ namespace monsoon
     // 初始化调度线程池
     void Scheduler::start()
     {
-        std::cout << LOG_HEAD << "scheduler start" << std::endl;
+        //std::cout << LOG_HEAD << "scheduler start" << std::endl;
         Mutex::Lock lock(mutex_);
         if (isStopped_)
         {
-            std::cout << "scheduler has stopped" << std::endl;
+            std::cerr << "scheduler has stopped" << std::endl;
             return;
         }
         CondPanic(threadPool_.empty(), "thread pool is not empty");
@@ -91,7 +91,7 @@ namespace monsoon
     // 调度协程
     void Scheduler::run()
     {
-        std::cout << LOG_HEAD << "begin run" << std::endl;
+        //std::cout << LOG_HEAD << "begin run" << std::endl;
         set_hook_enable(true);
         setThis();
         if (GetThreadId() != rootThread_)
@@ -170,7 +170,7 @@ namespace monsoon
                 // 任务队列为空
                 if (idleFiber->getState() == Fiber::TERM)
                 {
-                    std::cout << "idle fiber term" << std::endl;
+                    std::cerr << "idle fiber term" << std::endl;
                     break;
                 }
                 // idle协程不断空轮转
@@ -179,12 +179,12 @@ namespace monsoon
                 --idleThreadCnt_;
             }
         }
-        std::cout << "run exit" << std::endl;
+        //std::cerr << "run exit" << std::endl;
     }
 
     void Scheduler::tickle()
     {
-        std::cout << "tickle" << std::endl;
+        //std::cout << "tickle" << std::endl;
     }
 
     bool Scheduler::stopping()
@@ -205,7 +205,7 @@ namespace monsoon
     // 不使用caller线程，只用caller线程去调度，则调度器真正开始执行的位置是stop()
     void Scheduler::stop()
     {
-        std::cout << LOG_HEAD << "stop" << std::endl;
+        //std::cout << LOG_HEAD << "stop" << std::endl;
         if (stopping())
         {
             return;
@@ -236,7 +236,7 @@ namespace monsoon
         {
             // 切换到调度协程，开始调度
             rootFiber_->resume();
-            std::cout << "root fiber end" << std::endl;
+            //std::cout << "root fiber end" << std::endl;
         }
 
         std::vector<Thread::ptr> threads;

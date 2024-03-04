@@ -22,7 +22,7 @@ private:
     std::shared_ptr<Operator> addScan(std::set<unsigned> &usedRelations, SelectInfo &info, QueryInfo &query);
     ThreadPool *threadPool;
 
-    vector<monsoon::IOManager *> ioms;
+    monsoon::IOManager * ioms;
     int pendingAsyncJoin = 0;
     int nextQueryIndex = 0;
     std::vector<std::vector<uint64_t>> asyncResults; // checksums
@@ -50,7 +50,7 @@ public:
     //: work(ioService)
     {
         threadPool = new ThreadPool(threadNum);
-        // iom = new monsoon::IOManager();
+        ioms = new monsoon::IOManager(THREAD_NUM,true);
 
         asyncResults.reserve(100);
         asyncJoins.reserve(100);
@@ -62,7 +62,7 @@ public:
                                 {
                                     tid = __sync_fetch_and_add(&nextTid, 1);
                                     localMemPool[tid] = new MemoryPool(4 * 1024 * 1024 * 1024lu, 4096);
-                                    ioms[i] = new monsoon::IOManager();
+                                    //ioms[i] = new monsoon::IOManager();
                                     // ioService.run();
                                 });
         }
@@ -71,7 +71,7 @@ public:
         for (int i = 0; i < threadNum; i++)
         {
             // ioService.post(bind(&Joiner::touchBuf, this, i));
-            ioms[i]->scheduler(bind(&Joiner::touchBuf, this, i));
+            ioms->scheduler(bind(&Joiner::touchBuf, this, i));
         }
         while (cntTouch < threadNum)
         {
@@ -80,7 +80,7 @@ public:
         for (int i = 0; i < threadNum; i++)
         {
             // ioService.post(bind(&Joiner::clearBuf, this, i));
-            ioms[i]->scheduler(bind(&Joiner::clearBuf, this, i));
+            ioms->scheduler(bind(&Joiner::clearBuf, this, i));
         }
     }
     /// The relations that might be joined

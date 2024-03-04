@@ -64,7 +64,7 @@ namespace monsoon
         char **strings = backtrace_symbols(array, s);
         if (strings == NULL)
         {
-            std::cout << "backtrace_synbols error" << std::endl;
+            std::cerr << "backtrace_synbols error" << std::endl;
             return;
         }
         // 解析每一个调用栈的信息，并将解析后的函数名添加到bt中
@@ -94,8 +94,8 @@ namespace monsoon
     {
         if (!condition)
         {
-            std::cout << "[assert by] (" << __FILE__ << ":" << __LINE__ << "),err: " << err << std::endl;
-            std::cout << "[backtrace]\n"
+            std::cerr << "[assert by] (" << __FILE__ << ":" << __LINE__ << "),err: " << err << std::endl;
+            std::cerr << "[backtrace]\n"
                       << BacktraceToString(6, 3, "") << std::endl;
             assert(condition);
         }

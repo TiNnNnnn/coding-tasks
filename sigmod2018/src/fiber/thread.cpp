@@ -18,7 +18,7 @@ namespace monsoon
         int rt = pthread_create(&thread_, nullptr, &Thread::run, this);
         if (rt)
         {
-            std::cout << "pthread_create error,name:" << name_ << std::endl;
+            //std::cout << "pthread_create error,name:" << name_ << std::endl;
             throw std::logic_error("pthread_create");
         }
     }
@@ -54,7 +54,7 @@ namespace monsoon
             int rt = pthread_join(thread_, nullptr);
             if (rt)
             {
-                std::cout << "pthread_join error,name:" << name_ << std::endl;
+                std::cerr << "pthread_join error,name:" << name_ << std::endl;
                 throw std::logic_error("pthread_join");
             }
             thread_ = 0;

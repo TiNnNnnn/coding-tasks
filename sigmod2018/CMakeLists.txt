@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g") 
 
-find_package(Boost REQUIRED COMPONENTS system thread)
+#find_package(Boost REQUIRED COMPONENTS system thread)
 
 include_directories(src/include)
 include_directories(src/fiber/include)
@@ -20,14 +20,6 @@ add_library(database
   src/Utils.cpp 
   src/Joiner.cpp 
   src/MemoryPool.cpp 
-  # Boost::system 
-  # Boost::thread 
-  # fiber_lib
-  # pthread 
-  # m 
-  # stdc++ 
-  # dl 
-  # jemalloc
   )
 
 target_include_directories(database PUBLIC
@@ -45,7 +37,8 @@ link_directories(${CMAKE_SOURCE_DIR}/lib)
 #构建可执行文件
 add_executable(Driver src/main/main.cpp)
 #target_link_libraries(Driver database)
-target_link_libraries(Driver database Boost::system Boost::thread tbb pthread m stdc++ dl jemalloc fiber_lib)
+#target_link_libraries(Driver database Boost::system Boost::thread tbb pthread m stdc++ dl jemalloc fiber_lib)
+target_link_libraries(Driver database pthread m stdc++ dl jemalloc fiber_lib)
 
 add_executable(Query2SQL src/main/Query2SQL.cpp)
 target_link_libraries(Query2SQL database)

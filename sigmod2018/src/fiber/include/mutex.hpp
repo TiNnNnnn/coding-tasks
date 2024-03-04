@@ -49,7 +49,7 @@ namespace monsoon
         {
             if (!isLocked_)
             {
-                std::cout << "lock" << std::endl;
+                //std::cout << "lock" << std::endl;
                 m_.lock();
                 isLocked_ = true;
             }
