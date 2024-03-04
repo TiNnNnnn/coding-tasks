@@ -9,7 +9,7 @@ template <typename T>
 class Column
 {
 	vector<T *> tuples;
-	vector<uint64_t> tupleLength; //@TODO maybe unsgind is enough?
+	vector<uint64_t> tupleLength; 
 	vector<uint64_t> baseOffset;
 	bool fixed = false;
 

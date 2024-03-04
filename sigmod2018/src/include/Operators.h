@@ -41,16 +41,15 @@ protected:
     std::unordered_map<SelectInfo, unsigned> select2ResultColId;
     /// The materialized results
     std::vector<Column<uint64_t>> results;
-    // std::vector<uint64_t*> resultColumns;
-    /// mutex for local ops to global
-    //    std::mutex localMt;
-    /// if 0, all asyncrunning input oeraotr finish.
     int pendingAsyncOperator = -1;
     virtual void finishAsyncRun(boost::asio::io_service &ioService, bool startParentAsync = false);
 
 public:
-    int counted = 0;        // 0 - no counting, 1 - make new counting, 2 - follow child op'counting
-    bool isStopped = false; // if ture, children can stop
+    //0:未进行统计, 
+    //1: 需要进行新统计
+    //2: 已经统计（按照子节点统计结果即可）
+    int counted = 0;        
+    bool isStopped = false; 
     /// Require a column and add it to results
     virtual bool require(SelectInfo info) = 0;
     /// Resolves a column
@@ -107,17 +106,17 @@ public:
 //---------------------------------------------------------------------------
 class FilterScan : public Scan
 {
-    /// The filter info
+    /// 过滤器，存储过滤语句的相关信息
     std::vector<FilterInfo> filters;
-    /// The input data
+    /// 任务执行所需的输入数据
     std::vector<uint64_t *> inputData;
     /// tmpResults
     std::vector<std::vector<std::vector<uint64_t>>> tmpResults; // [partition][col][tuple]
-    /// Apply filter
+    /// 应用过滤器
     bool applyFilter(uint64_t id, FilterInfo &f);
     /// Copy tuple to result
     void copy2Result(uint64_t id);
-    /// for parallel
+    /// 当前正在执行的filterScan任务
     int pendingTask = -1;
 
     unsigned minTuplesPerTask = 1000;
@@ -141,23 +140,20 @@ public:
     virtual void printAsyncInfo() override;
     /// The result size
 };
-//---------------------------------------------------------------------------
+
 class Join : public Operator
 {
+private:
     /// The input operators
     std::shared_ptr<Operator> left, right;
     /// The join predicate info
     PredicateInfo pInfo;
     /// tmpResults
     std::vector<std::vector<std::vector<std::vector<uint64_t>>>> tmpResults; // [partition][probingTaskIndex][col][tuple]
-    /// Copy tuple to result
-    void copy2Result(uint64_t leftId, uint64_t rightId);
-    /// Create mapping for bindings
-    void createMappingForBindings();
 
     char pad1[CACHE_LINE_SIZE];
-    int pendingMakingHistogram[2 * CACHE_LINE_SIZE]; 
-    int pendingScattering[2 * CACHE_LINE_SIZE]; 
+    int pendingMakingHistogram[2 * CACHE_LINE_SIZE];
+    int pendingScattering[2 * CACHE_LINE_SIZE];
     int pendingPartitioning = -1;
     char pad2[CACHE_LINE_SIZE];
     int pendingBuilding = -1;
@@ -181,7 +177,7 @@ class Join : public Operator
 
     uint64_t taskLength[2];
     uint64_t taskRest[2];
-    
+
     const unsigned minTuplesPerTask = 100000; // minimum part table size
                                               //    const unsigned minTuplesPerProbing = 1000; // minimum part table size
     // 指向分区表的
@@ -191,10 +187,16 @@ class Join : public Operator
 
     std::vector<std::unordered_multimap<uint64_t, uint64_t> *> hashTablesIndices; // for using thread local storage
     std::vector<std::unordered_map<uint64_t, uint64_t> *> hashTablesCnt;          // for using thread local storage
-    
+
     // 是否正在构建哈希表
     bool cntBuilding = false;
 
+private:    
+    /// Copy tuple to result
+    void copy2Result(uint64_t leftId, uint64_t rightId);
+    /// Create mapping for bindings
+    void createMappingForBindings();
+   
     void histogramTask(boost::asio::io_service *ioService, int cntTask, int taskIndex, int leftOrRight, uint64_t start, uint64_t length);
     void scatteringTask(boost::asio::io_service *ioService, int taskIndex, int leftOrRight, uint64_t start, uint64_t length);
     // for cache, partition must be allocated sequentially
@@ -206,31 +208,15 @@ class Join : public Operator
     std::unordered_set<SelectInfo> requestedColumns;
     /// Left/right columns that have been requested
     std::vector<SelectInfo> requestedColumnsLeft, requestedColumnsRight;
-
     /// The entire input data of left and right
     std::vector<Column<uint64_t>> leftInputData, rightInputData;
-    /// The input data that has to be copied
-    // std::vector<uint64_t*> copyLeftData,copyRightData;
     /// key colums
     unsigned leftColId, rightColId;
 
 public:
     /// The constructor
     Join(std::shared_ptr<Operator> &left, std::shared_ptr<Operator> &right, PredicateInfo pInfo) : left(left), right(right), pInfo(pInfo){};
-    ~Join()
-    {
-
-        //        free(partitionTable[0]);
-        //        free(partitionTable[1]);
-        //        if (!hashTables.size())
-        //            return;
-        /*
-                for (unsigned i=0; i<cntPartition; i++) {
-                    if(hashTables[i] != NULL)
-                        delete hashTables[i];
-                }
-                */
-    }
+    ~Join() {}
     /// Require a column and add it to results
     bool require(SelectInfo info) override;
     /// AsyncRun

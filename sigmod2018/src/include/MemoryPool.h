@@ -21,10 +21,6 @@ public:
 
     tbb::concurrent_vector<void *> gcTarget;
 
-    /*
-        2*level만큼의 메모리 풀
-        assign_unit단위로 할당
-    */
     MemoryPool(uint64_t size, uint64_t assign_unit);
     ~MemoryPool();
     void *alloc(uint64_t size);

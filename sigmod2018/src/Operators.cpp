@@ -10,10 +10,21 @@
 
 using namespace std;
 
+// Get materialized results
+vector<Column<uint64_t>> &Operator::getResults()
+{
+    return results;
+}
+
+uint64_t Operator::getResultsSize()
+{
+    return resultSize * results.size() * 8;
+}
+
 void Operator::finishAsyncRun(boost::asio::io_service &ioService, bool startParentAsync)
 {
     isStopped = true;
-    //左右任务已经完成，开始执行父任务
+    // 左右任务已经完成，开始执行父任务
     if (auto p = parent.lock())
     {
         if (resultSize == 0)
@@ -25,6 +36,7 @@ void Operator::finishAsyncRun(boost::asio::io_service &ioService, bool startPare
     }
     else
     {
+        //已经是root节点
     }
 }
 
@@ -58,11 +70,14 @@ void Scan::asyncRun(boost::asio::io_service &ioService)
 {
     cerr << "Scan::run" << endl;
     pendingAsyncOperator = 0;
+    // 如果只有一列且之前已经进行了元素统计
     if (infos.size() == 1 && !relation.counted[infos[0].colId].empty())
     {
+        // resultSize为当前列不同元素个数，将当前列和计数列加入运行result中
         resultSize = relation.counted[infos[0].colId][1] - relation.counted[infos[0].colId][0];
         results[0].addTuples(0, relation.counted[infos[0].colId][0], resultSize); // Count Column
         results[0].fix();
+
         results.emplace_back(1);
         results[1].addTuples(0, relation.counted[infos[0].colId][1], resultSize); // Count Column
         results[1].fix();
@@ -70,15 +85,18 @@ void Scan::asyncRun(boost::asio::io_service &ioService)
     }
     else
     {
+        // 扫描所有需要处理的列
         for (int i = 0; i < infos.size(); i++)
         {
             results[i].addTuples(0, relation.columns[infos[i].colId], relation.size);
             results[i].fix();
         }
+        // resultSize为总行数
         resultSize = relation.size;
     }
     finishAsyncRun(ioService, true);
 }
+
 // Require a column and add it to results
 bool FilterScan::require(SelectInfo info)
 {
@@ -118,7 +136,6 @@ void FilterScan::asyncRun(boost::asio::io_service &ioService)
     __sync_synchronize();
     createAsyncTasks(ioService);
 }
-
 
 void FilterScan::createAsyncTasks(boost::asio::io_service &ioService)
 {
@@ -174,6 +191,7 @@ void FilterScan::createAsyncTasks(boost::asio::io_service &ioService)
 
     if (counted == 2)
     {
+        // 如果之前已经对元素频率进行了统计
         inputData.emplace_back(relation.counted[infos[0].colId][0]);
         inputData.emplace_back(relation.counted[infos[0].colId][1]);
         results.emplace_back(cntTask);
@@ -190,6 +208,11 @@ void FilterScan::createAsyncTasks(boost::asio::io_service &ioService)
         {
             results.emplace_back(cntTask);
         }
+
+        // for (int i = 0; i < inputData.size(); i++)
+        // {
+        //     cerr << "fiterscan inputdata: " << *inputData[i] << endl;
+        // }
     }
 
     for (int i = 0; i < cntTask; i++)
@@ -216,6 +239,7 @@ void FilterScan::createAsyncTasks(boost::asio::io_service &ioService)
 
 void FilterScan::filterTask(boost::asio::io_service *ioService, int taskIndex, uint64_t start, uint64_t length)
 {
+    //atomic_cout << "[tid: " << Utils::GetThreadId() << "] run filtertask " << endl;
     // 當前為空
     vector<vector<uint64_t>> &localResults = tmpResults[taskIndex];
     unsigned colSize = inputData.size();
@@ -231,7 +255,7 @@ void FilterScan::filterTask(boost::asio::io_service *ioService, int taskIndex, u
     {
         localResults.emplace_back();
     }
-    // For Count Column
+    // 增加计数列
     if (counted)
     {
         localResults.emplace_back();
@@ -265,7 +289,7 @@ void FilterScan::filterTask(boost::asio::io_service *ioService, int taskIndex, u
             }
             else
             {
-                // If count == 2, colSize already contains count column
+                //count == 2, colSize already contains count column
                 for (unsigned cId = 0; cId < colSize; ++cId)
                     localResults[cId].push_back(inputData[cId][i]);
             }
@@ -298,18 +322,6 @@ fs_finish:
         }
         finishAsyncRun(*ioService, true);
     }
-}
-
-//---------------------------------------------------------------------------
-vector<Column<uint64_t>> &Operator::getResults()
-// Get materialized results
-{
-    return results;
-}
-//---------------------------------------------------------------------------
-uint64_t Operator::getResultsSize()
-{
-    return resultSize * results.size() * 8;
 }
 //---------------------------------------------------------------------------
 bool Join::require(SelectInfo info)
@@ -407,23 +419,19 @@ void Join::createAsyncTasks(boost::asio::io_service &ioService)
     leftColId = left->resolve(pInfo.left);
     rightColId = right->resolve(pInfo.right);
 
-    // cntPartition = CNT_PARTITIONS(right->getResultsSize(), partitionSize);
-
-    // 计算HASH分区数量
+    // 计算HASH分区数量，向上取整，得到2的整数次幂
     cntPartition = CNT_PARTITIONS(left->resultSize * 8 * 2, partitionSize); // uint64*2(key, value)
-    // CNT_PARTITIONS(left->getResultsSize(), partitionSize);
     if (cntPartition < 32)
-        cntPartition = 32;
-    // 向上取整，得到2的整数次幂
+        cntPartition = 32; 
     cntPartition = 1 << (Utils::log2(cntPartition - 1) + 1);
-
     pendingPartitioning = 2;
 
+    // 分配内存用于存储分区表
     partitionTable[0] = (uint64_t *)localMemPool[tid]->alloc(left->getResultsSize());
     partitionTable[1] = (uint64_t *)localMemPool[tid]->alloc(right->getResultsSize());
-
     allocTid = tid;
 
+    // 初始化分区、直方图和任务相关的数据结构
     for (uint64_t i = 0; i < cntPartition; i++)
     {
         partition[0].emplace_back();
@@ -436,7 +444,6 @@ void Join::createAsyncTasks(boost::asio::io_service &ioService)
         {
             partition[1][i].emplace_back();
         }
-
         tmpResults.emplace_back();
     }
 
@@ -447,6 +454,7 @@ void Join::createAsyncTasks(boost::asio::io_service &ioService)
     taskRest[0] = left->resultSize % cntTaskLeft;
     taskRest[1] = right->resultSize % cntTaskRight;
 
+    //调整任务长度
     if (taskLength[0] < minTuplesPerTask)
     {
         cntTaskLeft = left->resultSize / minTuplesPerTask;
@@ -463,6 +471,7 @@ void Join::createAsyncTasks(boost::asio::io_service &ioService)
         taskLength[1] = right->resultSize / cntTaskRight;
         taskRest[1] = right->resultSize % cntTaskRight;
     }
+    //为直方图预留空间
     histograms[0].reserve(cntTaskLeft);
     histograms[1].reserve(cntTaskRight);
     for (int i = 0; i < cntTaskLeft; i++)
@@ -491,6 +500,7 @@ void Join::createAsyncTasks(boost::asio::io_service &ioService)
         ioService.post(bind(&Join::histogramTask, this, &ioService, cntTaskLeft, i, 0, startLeft, lengthLeft)); // for left
         startLeft += lengthLeft;
     }
+
     uint64_t startRight = 0;
     uint64_t restRight = taskRest[1];
     for (int i = 0; i < cntTaskRight; i++)
@@ -501,6 +511,7 @@ void Join::createAsyncTasks(boost::asio::io_service &ioService)
             lengthRight++;
             restRight--;
         }
+        //执行直方图统计任务，了解数据分布
         ioService.post(bind(&Join::histogramTask, this, &ioService, cntTaskRight, i, 1, startRight, lengthRight)); // for right
         startRight += lengthRight;
     }
@@ -523,11 +534,15 @@ void Join::histogramTask(boost::asio::io_service *ioService, int cntTask, int ta
     }
     int remainder = __sync_sub_and_fetch(&pendingMakingHistogram[leftOrRight * CACHE_LINE_SIZE], 1);
 
+    
+    //所有直方图任务均已完成
     if (UNLIKELY(remainder == 0))
-    { // gogo scattering
+    { 
+        //对每个哈希桶进行数据分片
         for (int i = 0; i < cntPartition; i++)
         {
             partitionLength[leftOrRight].push_back(0);
+             // 计算每个哈希桶的数据长度，并在必要时进行累加
             for (int j = 0; j < cntTask; j++)
             {
                 partitionLength[leftOrRight][i] += histograms[leftOrRight][j][i];
@@ -537,11 +552,13 @@ void Join::histogramTask(boost::asio::io_service *ioService, int cntTask, int ta
                 }
             }
         }
+        // 如果处理的是右表数据，则准备进行哈希连接的后续操作
         if (leftOrRight == 1)
-        { // variables for probingTask
+        { 
             resultIndex.push_back(0);
             for (int i = 0; i < cntPartition; i++)
             {
+                 // 计算每个哈希桶的数据长度，并准备用于哈希连接操作
                 uint64_t limitRight = partitionLength[1][i];
                 unsigned cntTask = THREAD_NUM;
                 uint64_t taskLength = limitRight / cntTask;
@@ -563,6 +580,7 @@ void Join::histogramTask(boost::asio::io_service *ioService, int cntTask, int ta
 
                 // hashTables.emplace_back();
             }
+            // 计算哈希连接的结果集大小，并为结果集分配空间
             unsigned probingResultSize = resultIndex[cntPartition];
             for (int i = 0; i < requestedColumns.size(); i++)
             {
@@ -573,7 +591,7 @@ void Join::histogramTask(boost::asio::io_service *ioService, int cntTask, int ta
                 results.emplace_back(probingResultSize); // For Count Column
             }
         }
-
+         // 为哈希分区表分配空间
         auto cntColumns = inputData.size(); // requestedColumns.size();
         uint64_t *partAddress = partitionTable[leftOrRight];
         // partition[leftOrRight][0][0] = partitionTable[leftOrRight];
@@ -586,6 +604,7 @@ void Join::histogramTask(boost::asio::io_service *ioService, int cntTask, int ta
             }
             partAddress += cntTuples * cntColumns;
         }
+        // 所有直方图任务完成，提交哈希分片任务
         pendingScattering[leftOrRight * CACHE_LINE_SIZE] = cntTask;
         __sync_synchronize();
 
@@ -618,23 +637,23 @@ void Join::scatteringTask(boost::asio::io_service *ioService, int taskIndex, int
     {
         goto scattering_finish;
     }
-    // copy histogram for cache
+     // 为每个哈希桶创建插入偏移数组
     for (int i = 0; i < cntPartition; i++)
     {
         insertOffs.push_back(0);
     }
-
+    // 初始化每列的迭代器
     for (unsigned i = 0; i < inputData.size(); i++)
     {
         colIt.push_back(inputData[i].begin(start));
     }
+     // 遍历输入数据，将数据插入到相应的哈希桶中
     for (uint64_t i = start, limit = start + length; i < limit; i++, ++keyIt)
     {
         uint64_t hashResult = RADIX_HASH(*keyIt, cntPartition);
         uint64_t insertBase;
         uint64_t insertOff = insertOffs[hashResult]++;
-        //        insertOffs[hashResult]++;
-
+        // 计算插入基址
         if (UNLIKELY(taskIndex == 0))
             insertBase = 0;
         else
@@ -650,6 +669,7 @@ void Join::scatteringTask(boost::asio::io_service *ioService, int taskIndex, int
 
 scattering_finish:
     int remainder = __sync_sub_and_fetch(&pendingScattering[leftOrRight * CACHE_LINE_SIZE], 1);
+     //所有哈希分片任务均已完成
     if (UNLIKELY(remainder == 0))
     {
         int remPart = __sync_sub_and_fetch(&pendingPartitioning, 1);
@@ -660,6 +680,7 @@ scattering_finish:
                 finishAsyncRun(*ioService, true);
                 return;
             }
+            // 选择需要进行哈希连接的子任务
             vector<unsigned> subJoinTarget;
             for (int i = 0; i < cntPartition; i++)
             {
@@ -668,8 +689,9 @@ scattering_finish:
                     subJoinTarget.push_back(i);
                 }
             }
+            //如果没有需要连接的子任务，则完成异步运行
             if (subJoinTarget.size() == 0)
-            { // left !=0 이지만 양쪽이 서로 다른 파티션으로만 나뉜경우
+            { 
                 for (unsigned cId = 0; cId < requestedColumns.size(); ++cId)
                 {
                     results[cId].fix();
@@ -683,6 +705,7 @@ scattering_finish:
                 finishAsyncRun(*ioService, true);
                 return;
             }
+            // 根据需要连接的子任务数量，分配哈希表内存
             for (int i = 0; i < cntPartition; i++)
             {
                 if (cntBuilding)
@@ -690,6 +713,7 @@ scattering_finish:
                 else
                     hashTablesIndices.emplace_back();
             }
+            // 初始化哈希表指针数组
             for (int i = 0; i < cntPartition; i++)
             {
                 if (cntBuilding)
@@ -697,6 +721,7 @@ scattering_finish:
                 else
                     hashTablesIndices[i] = NULL;
             }
+            // 设置待构建哈希表的数量，并同步
             pendingBuilding = subJoinTarget.size();
             unsigned taskNum = pendingBuilding;
             __sync_synchronize();
@@ -710,12 +735,13 @@ scattering_finish:
 
 void Join::buildingTask(boost::asio::io_service *ioService, int taskIndex, vector<uint64_t *> localLeft, uint64_t limitLeft, vector<uint64_t *> localRight, uint64_t limitRight)
 {
-    // Resolve the partitioned columns
+    // 解析分区列
     if (limitLeft > hashThreshold)
     {
         uint64_t *leftKeyColumn = localLeft[leftColId];
         if (cntBuilding)
         {
+            // 构建计数哈希表
             hashTablesCnt[taskIndex] = new unordered_map<uint64_t, uint64_t>();
             unordered_map<uint64_t, uint64_t> *hashTable = hashTablesCnt[taskIndex];
 
@@ -730,6 +756,7 @@ void Join::buildingTask(boost::asio::io_service *ioService, int taskIndex, vecto
         }
         else
         {
+            // 构建索引哈希表
             hashTablesIndices[taskIndex] = new unordered_multimap<uint64_t, uint64_t>();
             unordered_multimap<uint64_t, uint64_t> *hashTable = hashTablesIndices[taskIndex];
             // vector<vector<uint64_t>>& localResults = tmpResults[taskIndex];
@@ -738,10 +765,10 @@ void Join::buildingTask(boost::asio::io_service *ioService, int taskIndex, vecto
             for (uint64_t i = 0; i < limitLeft; i++)
             {
                 hashTable->emplace(make_pair(leftKeyColumn[i], i));
-                //    bloomFilter.insert(leftKeyColumn[i]);
             }
         }
     }
+     // 获取探测任务的数量和长度
     unsigned cntTask = cntProbing[taskIndex];
     uint64_t taskLength = lengthProbing[taskIndex];
     unsigned rest = restProbing[taskIndex];
@@ -775,9 +802,10 @@ void Join::buildingTask(boost::asio::io_service *ioService, int taskIndex, vecto
 
 void Join::probingTask(boost::asio::io_service *ioService, int partIndex, int taskIndex, vector<uint64_t *> localLeft, uint64_t leftLength, vector<uint64_t *> localRight, uint64_t start, uint64_t length)
 {
-    // unordered_multimap<uint64_t, uint64_t>& hashTable = hashTables[partIndex];
+    // 获取右表的键列和左表的键列
     uint64_t *rightKeyColumn = localRight[rightColId];
     uint64_t *leftKeyColumn = localLeft[leftColId];
+     // 存储左表和右表的数据副本
     vector<uint64_t *> copyLeftData, copyRightData;
     vector<vector<uint64_t>> &localResults = tmpResults[partIndex][taskIndex];
     uint64_t limit = start + length;
@@ -797,6 +825,7 @@ void Join::probingTask(boost::asio::io_service *ioService, int partIndex, int ta
     if (leftLength == 0 || length == 0)
         goto probing_finish;
 
+     // 根据哈希表的类型，获取哈希表指针
     if (cntBuilding)
     {
         hashTableCnt = hashTablesCnt[partIndex];
@@ -805,15 +834,17 @@ void Join::probingTask(boost::asio::io_service *ioService, int partIndex, int ta
     {
         hashTableIndices = hashTablesIndices[partIndex];
     }
-
+    // 初始化本地结果
     for (unsigned j = 0; j < requestedColumns.size(); j++)
     {
         localResults.emplace_back();
     }
+    // 如果计数标志为真，则额外初始化一个本地结果存储计数
     if (counted)
     {
         localResults.emplace_back(); // For Count Column
     }
+     // 获取左表和右表请求列的数据副本
     for (auto &info : requestedColumnsLeft)
     {
         copyLeftData.push_back(localLeft[left->resolve(info)]);
@@ -822,6 +853,7 @@ void Join::probingTask(boost::asio::io_service *ioService, int partIndex, int ta
     {
         copyLeftData.push_back(localLeft.back()); // Count Column for left
     }
+
     for (auto &info : requestedColumnsRight)
     {
         copyRightData.push_back(localRight[right->resolve(info)]);
@@ -831,26 +863,34 @@ void Join::probingTask(boost::asio::io_service *ioService, int partIndex, int ta
         copyRightData.push_back(localRight.back()); // Count Column for right
     }
 
+    // 如果左表长度大于哈希阈值，则执行哈希连接
     if (leftLength > hashThreshold)
     {
-        // probing
+        //哈希连接
         if (cntBuilding)
         {
+
             for (uint64_t i = start; i < limit; i++)
             {
+                // 遍历右表的键列
                 auto rightKey = rightKeyColumn[i];
+                // 如果右表的键值在哈希表中找不到对应的条目，则继续下一条记录
                 if (hashTableCnt->find(rightKey) == hashTableCnt->end())
                     continue;
+                // 获取左表匹配键值对应的计数
                 uint64_t leftCnt = hashTableCnt->at(rightKey);
+                // 获取右表对应行的计数，如果右表没有计数列，则默认为1
                 uint64_t rightCnt = right->counted ? copyRightData[rightColSize][i] : 1;
                 if (counted == 1)
                 {
+                     // 如果只有一列结果，则直接存储右表的键值和左表的计数乘积
                     auto data = (leftColSize == 1) ? rightKey : copyRightData[0][i];
                     localResults[0].push_back(data);
                     localResults[1].push_back(leftCnt * rightCnt);
                 }
                 else
                 {
+                    //存储左表的键值、右表请求列的值，以及左右表计数的乘积
                     unsigned relColId = 0;
                     for (unsigned cId = 0; cId < leftColSize; ++cId) // if exist
                         localResults[relColId++].push_back(rightKey);
@@ -863,16 +903,14 @@ void Join::probingTask(boost::asio::io_service *ioService, int partIndex, int ta
                 }
             }
         }
-        else
+        else//索引哈希表，则按索引进行匹配
         {
             for (uint64_t i = start; i < limit; i++)
             {
+                // 遍历右表的键列
                 auto rightKey = rightKeyColumn[i];
-                /*
-                if (!bloomFilter.contains(rightKey))
-                    continue;
-                    */
                 auto range = hashTableIndices->equal_range(rightKey);
+                // 在哈希表中查找右表键值对应的所有左表索引
                 for (auto iter = range.first; iter != range.second; ++iter)
                 {
                     if (counted == 1)
@@ -913,6 +951,7 @@ void Join::probingTask(boost::asio::io_service *ioService, int partIndex, int ta
         }
     }
     else
+    // 如果左表长度小于等于哈希阈值，则执行嵌套循环连接 (效率低)
     {
         for (uint64_t i = 0; i < leftLength; i++)
         {

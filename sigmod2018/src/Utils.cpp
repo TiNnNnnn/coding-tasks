@@ -25,8 +25,8 @@ static void createColumn(vector<uint64_t *> &columns, uint64_t numTuples)
     }
 }
 
-Relation Utils::createRelation(uint64_t size, uint64_t numColumns)
 // Create a dummy relation
+Relation Utils::createRelation(uint64_t size, uint64_t numColumns)
 {
     vector<uint64_t *> columns;
     for (unsigned i = 0; i < numColumns; ++i)
@@ -58,3 +58,7 @@ int Utils::log2(unsigned v)
     return n;
 }
 
+std::thread::id Utils::GetThreadId()
+{
+    return std::this_thread::get_id();
+}

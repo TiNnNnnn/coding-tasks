@@ -20,15 +20,15 @@ int main(int argc, char *argv[])
     }
     joiner.loadStat();
     // 读入查询语句
-    int d = 0;
+    //int d = 0;
     while (getline(cin, line))
     {
-        if (d == 0)
-        {
-            d++;
-            continue;
-        }
-        if (line == "F" || d == 2)
+        // if (d == 0)
+        // {
+        //     d++;
+        //     continue;
+        // }
+        if (line == "F")
         { // End of a batch
             joiner.waitAsyncJoins();
             auto results = joiner.getAsyncJoinResults(); // result strings vector
@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
             continue;
         }
         joiner.createAsyncQueryTask(line);
-        d++;
+        //d++;
     }
     return 0;
 }

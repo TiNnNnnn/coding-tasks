@@ -16,6 +16,7 @@ class Operator;
 
 class Joiner
 {
+private:
     friend Checksum;
     /// Add scan to query
     std::shared_ptr<Operator> addScan(std::set<unsigned> &usedRelations, SelectInfo &info, QueryInfo &query);
@@ -34,6 +35,7 @@ class Joiner
 
     char *buf[THREAD_NUM];
     int cntTouch;
+private:
     void touchBuf(int i)
     {
         buf[i] = (char *)malloc(4 * 2 * 1024 * 1024 * 1024ll);
@@ -55,7 +57,6 @@ public:
         {
             threadPool.create_thread([&]()
                                      {
-                    // cout << "Test" << endl;
                     tid = __sync_fetch_and_add(&nextTid, 1);
                     localMemPool[tid] = new MemoryPool(4*1024*1024*1024lu, 4096);
                     ioService.run(); });
@@ -103,4 +104,3 @@ public:
         delete[] localMemPool;
     }
 };
-//---------------------------------------------------------------------------
