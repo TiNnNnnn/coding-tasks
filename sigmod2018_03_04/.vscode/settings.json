@@ -55,6 +55,7 @@
         "mutex": "cpp",
         "new": "cpp",
         "ostream": "cpp",
+        "shared_mutex": "cpp",
         "sstream": "cpp",
         "stdexcept": "cpp",
         "streambuf": "cpp",
@@ -62,8 +63,6 @@
         "cinttypes": "cpp",
         "typeindex": "cpp",
         "typeinfo": "cpp",
-        "variant": "cpp",
-        "shared_mutex": "cpp",
-        "*.ipp": "cpp"
+        "variant": "cpp"
     }
 }
